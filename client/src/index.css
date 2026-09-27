@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-slate-50 font-sans text-slate-900 antialiased;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-solar-400 ring-offset-2;
+  }
+  ::selection {
+    @apply bg-solar-200 text-forest-950;
+  }
+}
+
+@layer components {
+  .sm-range {
+    @apply h-2 cursor-pointer appearance-none rounded-full bg-transparent;
+    background: linear-gradient(to right, #177a4e 0%, #177a4e var(--fill), #e2e8f0 var(--fill), #e2e8f0 100%);
+  }
+  .sm-range::-webkit-slider-thumb {
+    @apply h-6 w-6 appearance-none rounded-full border-4 border-white bg-forest-700 shadow-md transition-transform;
+  }
+  .sm-range::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+  }
+  .sm-range::-moz-range-thumb {
+    @apply h-5 w-5 rounded-full border-4 border-white bg-forest-700 shadow-md;
+  }
+  .sm-range:focus-visible {
+    @apply ring-2 ring-solar-400 ring-offset-4;
+  }
+  .bg-solar-grid {
+    background-image: radial-gradient(circle at 1px 1px, rgba(15, 64, 46, 0.08) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
