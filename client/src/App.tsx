@@ -29,6 +29,7 @@ const ApplicationsPage = lazyNamed(() => import('@/pages/admin/ApplicationsPage'
 const ApplicationDetailPage = lazyNamed(() => import('@/pages/admin/ApplicationDetailPage'), 'ApplicationDetailPage');
 const VendorsAdminPage = lazyNamed(() => import('@/pages/admin/VendorsAdminPage'), 'VendorsAdminPage');
 const AnalyticsPage = lazyNamed(() => import('@/pages/admin/AnalyticsPage'), 'AnalyticsPage');
+const MoneyFlowPage = lazyNamed(() => import('@/pages/admin/MoneyFlowPage'), 'MoneyFlowPage');
 const SettingsPage = lazyNamed(() => import('@/pages/admin/SettingsPage'), 'SettingsPage');
 const NotFoundPage = lazyNamed(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="applications/:id" element={<ApplicationDetailPage />} />
               <Route path="vendors" element={<VendorsAdminPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="money-flow" element={<MoneyFlowPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Route>

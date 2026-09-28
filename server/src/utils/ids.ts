@@ -11,3 +11,7 @@ export function generateApplicationId(existingIds: Set<string>, year = new Date(
 export function generateAuditId(): string {
   return `AUD-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 }
+
+export function generateTransactionId(): string {
+  return `TX-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+}

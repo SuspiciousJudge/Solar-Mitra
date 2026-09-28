@@ -9,12 +9,14 @@ export interface TokenPayload {
   sub: string;
   email: string;
   role: UserRole;
+  /** Carried in the token so the audit trail can record who acted. */
+  name: string;
 }
 
 export const toPublicUser = ({ passwordHash: _passwordHash, ...user }: UserRecord): PublicUser => user;
 
 export function signToken(user: PublicUser): string {
-  const payload: TokenPayload = { sub: user.id, email: user.email, role: user.role };
+  const payload: TokenPayload = { sub: user.id, email: user.email, role: user.role, name: user.name };
   return jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn } as SignOptions);
 }
 

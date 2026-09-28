@@ -1,19 +1,31 @@
-import { CalendarCheck, CircleCheckBig, CircleX, Clock, ThumbsUp } from 'lucide-react';
+import { CalendarCheck, CircleCheckBig, CircleX, Clock, CreditCard, FileCheck2, HandCoins, Landmark, Plug, Receipt, ThumbsUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import type { ApplicationStatus } from '@/types';
+import { MILESTONE_ORDER, type ApplicationStatus } from '@/types';
+import { STATUS_BADGE_VARIANT } from '@/utils/statusVisuals';
 
-const CONFIG: Record<ApplicationStatus, { variant: 'yellow' | 'green' | 'red' | 'blue' | 'purple'; icon: typeof Clock }> = {
-  'Pending Verification': { variant: 'yellow', icon: Clock },
-  Approved: { variant: 'green', icon: ThumbsUp },
-  Rejected: { variant: 'red', icon: CircleX },
-  'Installation Scheduled': { variant: 'blue', icon: CalendarCheck },
-  Completed: { variant: 'purple', icon: CircleCheckBig },
+type Variant = 'yellow' | 'green' | 'red' | 'blue' | 'purple' | 'gray' | 'outline';
+
+/** One visual language for all 11 lifecycle statuses. */
+const ICONS: Record<ApplicationStatus, typeof Clock> = {
+  'Pending Verification': Clock,
+  Approved: ThumbsUp,
+  Rejected: CircleX,
+  'Loan Sanctioned': Landmark,
+  'Loan Disbursed': HandCoins,
+  'Installation Scheduled': CalendarCheck,
+  Installed: FileCheck2,
+  'Net Meter Commissioned': Plug,
+  'Subsidy Claimed': Receipt,
+  'Subsidy Credited': CreditCard,
+  Completed: CircleCheckBig,
 };
 
-export function StatusBadge({ status }: { status: ApplicationStatus }) {
-  const { variant, icon: Icon } = CONFIG[status];
+export function StatusBadge({ status, className }: { status: ApplicationStatus; className?: string }) {
+  const variant = (STATUS_BADGE_VARIANT[status] ?? 'gray') as Variant;
+  const Icon = ICONS[status] ?? Clock;
+  const milestone = MILESTONE_ORDER[status];
   return (
-    <Badge variant={variant} className="whitespace-nowrap">
+    <Badge variant={variant} className={className} title={`Milestone ${milestone + 1} of 10`}>
       <Icon className="h-3 w-3" aria-hidden="true" />
       {status}
     </Badge>
