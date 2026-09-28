@@ -78,10 +78,10 @@ describe('vendors & audits', () => {
     expect(res.body.data.recommendation).toMatchObject({ recommendedKW: 3, netCost: 57000 });
   });
 
-  it('rejects 0 units', async () => {
+  it('accepts 0 units and returns a zero recommendation', async () => {
     const res = await request(app).post('/api/audits').send({ state: 'Uttar Pradesh', monthlyUnits: 0 });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe('Monthly consumption must be greater than 0');
+    expect(res.status).toBe(201);
+    expect(res.body.data.recommendation.recommendedKW).toBe(0);
   });
 });
 
@@ -92,6 +92,17 @@ describe('applications & leads', () => {
     expect(res.body.data).toMatchObject({ systemKW: 3, netCost: 57000, status: 'Pending Verification' });
     expect(res.body.data.id).toMatch(/^SM-\d{4}-\d{4}$/);
     expect(Math.abs(res.body.data.emi - 1770)).toBeLessThan(10);
+  });
+
+  it('recomputes cost and support for a selected alternative system size', async () => {
+    const res = await request(app).post('/api/applications').send({ ...validApplication, selectedKW: 4, loanAmount: 20000 });
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ systemKW: 4, marketCost: 215000, centralSubsidy: 78000, stateSubsidy: 30000, netCost: 107000 });
+  });
+
+  it('rejects unsupported selected system sizes', async () => {
+    const res = await request(app).post('/api/applications').send({ ...validApplication, selectedKW: 11 });
+    expect(res.status).toBe(400);
   });
 
   it('rejects invalid phone numbers', async () => {

@@ -3,7 +3,8 @@ import type { z } from 'zod';
 import { getValidatedQuery } from '../middleware/validate';
 import { getStore } from '../services/dataStore';
 import { queryLeads, type LeadQuery } from '../services/leadQuery';
-import { calculateLoanSummary, calculateSolarRecommendation } from '../services/solarCalculator';
+import { calculateLoanSummary, calculateSolarRecommendation, calculateMarketCost, calculateSubsidy, calculateNetCost } from '../services/solarCalculator';
+import { DEMO_POLICY } from '../config/policyConfig';
 import { AppError, notFound } from '../utils/AppError';
 import { sendSuccess } from '../utils/apiResponse';
 import type { createApplicationSchema, statusUpdateSchema } from '../validators/schemas';
@@ -17,7 +18,12 @@ export async function createApplication(req: Request, res: Response) {
   if (!vendor.active) throw new AppError(400, 'The selected vendor is not accepting new installations');
 
   // Figures are recomputed server-side so the stored application never trusts client maths.
-  const rec = calculateSolarRecommendation(input.monthlyUnits, input.state, input.monthlyBill);
+  const recommendation = calculateSolarRecommendation(input.monthlyUnits, input.state, input.monthlyBill);
+  const selectedKW = input.selectedKW ?? recommendation.recommendedKW;
+  if (selectedKW < 1 || selectedKW > DEMO_POLICY.maxRecommendedKW) throw new AppError(400, 'Selected system size is not supported');
+  const marketCost = calculateMarketCost(selectedKW);
+  const subsidy = calculateSubsidy(selectedKW, input.state, marketCost);
+  const rec = { ...recommendation, recommendedKW: selectedKW, marketCost, ...subsidy, netCost: calculateNetCost(marketCost, subsidy.totalSubsidy) };
   if (input.loanAmount > rec.netCost) throw new AppError(400, 'Loan amount cannot exceed the estimated net cost');
   const hasLoan = input.loanAmount > 0;
   if (hasLoan && input.tenureMonths < 6) throw new AppError(400, 'Loan tenure must be at least 6 months');
@@ -42,6 +48,12 @@ export async function createApplication(req: Request, res: Response) {
     tenureMonths: hasLoan ? input.tenureMonths : 0,
     emi: loan.emi,
     vendorId: vendor.id,
+    selectedKW,
+    preferredDate: input.preferredDate,
+    preferredTime: input.preferredTime,
+    installerNote: input.note,
+    consentGiven: input.consentGiven,
+    journey: input.journey,
   });
   sendSuccess(res, application, 201);
 }

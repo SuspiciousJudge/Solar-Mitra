@@ -25,6 +25,12 @@ const applicationSchema = new Schema<ApplicationDoc>(
     state: { type: String, required: true, index: true },
     auditId: { type: String },
     vendorId: { type: String, required: true },
+    selectedKW: { type: Number },
+    preferredDate: { type: String },
+    preferredTime: { type: String },
+    installerNote: { type: String, maxlength: 500 },
+    consentGiven: { type: Boolean, default: false },
+    journey: { type: Schema.Types.Mixed },
     // Snapshot of the audit & financing at submission time, so later policy
     // changes never rewrite what the household was shown.
     monthlyUnits: { type: Number, required: true },

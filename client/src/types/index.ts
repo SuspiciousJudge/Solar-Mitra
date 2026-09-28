@@ -80,6 +80,14 @@ export interface Application {
   emi: number;
   vendorId: string;
   vendorName?: string;
+  journey?: {
+    electricity?: { consumerName?: string; consumerNumber?: string; discom?: string; meterNumber?: string; connectionType?: string; sanctionedLoad?: string; billingPeriod?: string };
+    personal?: { alternateMobile?: string; email?: string; dateOfBirth?: string; preferredLanguage?: string };
+    kyc?: { documentType?: string; documentStatus?: 'demo-collection-only' };
+    property?: { ownership?: string; permission?: boolean; addressLine1?: string; addressLine2?: string; city?: string; district?: string; state?: string; pinCode?: string; roofType?: string; roofArea?: number; shaded?: string };
+    solar?: { batteryPreference?: string; paymentPreference?: string };
+    booking?: { preferredDate?: string; preferredTime?: string; note?: string; consentGiven?: boolean };
+  };
   status: ApplicationStatus;
   timeline: TimelineEvent[];
   isSeed: boolean;
@@ -122,6 +130,12 @@ export interface NewApplicationPayload {
   loanAmount: number;
   interestRate: number;
   tenureMonths: number;
+  selectedKW?: number;
+  preferredDate?: string;
+  preferredTime?: string;
+  note?: string;
+  consentGiven?: boolean;
+  journey?: Application['journey'];
 }
 
 export interface AuditResult {

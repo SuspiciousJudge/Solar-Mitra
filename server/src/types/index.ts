@@ -59,6 +59,15 @@ export interface TimelineEvent {
   at: string;
 }
 
+export interface ApplicationJourneyDetails {
+  electricity?: { consumerName?: string; consumerNumber?: string; discom?: string; meterNumber?: string; connectionType?: string; sanctionedLoad?: string; billingPeriod?: string };
+  personal?: { alternateMobile?: string; email?: string; dateOfBirth?: string; preferredLanguage?: string };
+  kyc?: { documentType?: string; documentStatus?: 'demo-collection-only' };
+  property?: { ownership?: string; permission?: boolean; addressLine1?: string; addressLine2?: string; city?: string; district?: string; state?: string; pinCode?: string; roofType?: string; roofArea?: number; shaded?: string };
+  solar?: { batteryPreference?: string; paymentPreference?: string };
+  booking?: { preferredDate?: string; preferredTime?: string; note?: string; consentGiven?: boolean };
+}
+
 export interface Application {
   id: string;
   applicantName: string;
@@ -79,6 +88,12 @@ export interface Application {
   tenureMonths: number;
   emi: number;
   vendorId: string;
+  selectedKW?: number;
+  preferredDate?: string;
+  preferredTime?: string;
+  installerNote?: string;
+  consentGiven?: boolean;
+  journey?: ApplicationJourneyDetails;
   vendorName?: string;
   status: ApplicationStatus;
   timeline: TimelineEvent[];
