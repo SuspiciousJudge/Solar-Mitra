@@ -2,13 +2,30 @@ import type {
   Application,
   ApplicationDetail,
   ApplicationStatus,
+  ApplicationView,
+  DuplicateWarning,
   LeadQuery,
   NewApplicationPayload,
   Paginated,
+  RejectionReason,
   SubmittedApplication,
   TrackedApplication,
 } from '@/types';
 import { api, isDemoFallbackEnabled, isNetworkError, unwrap } from './api';
+import type { AssignmentInput } from './leadService';
+
+const cleanParams = (query: LeadQuery = {}): Record<string, string> => {
+  const params: Record<string, string> = {};
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    if (Array.isArray(value)) {
+      if (value.length) params[key] = value.join(',');
+      return;
+    }
+    params[key] = String(value);
+  });
+  return params;
+};
 
 export async function submitApplication(payload: NewApplicationPayload): Promise<SubmittedApplication> {
   try {
@@ -24,14 +41,25 @@ export async function submitApplication(payload: NewApplicationPayload): Promise
   }
 }
 
+/** Public, privacy-safe tracking endpoint: the household polls it by application ID. */
 export const trackApplication = (id: string) =>
   unwrap<TrackedApplication>(api.get(`/applications/${encodeURIComponent(id)}/track`));
 
 export const fetchApplications = (query: LeadQuery = {}) =>
-  unwrap<Paginated<Application>>(api.get('/applications', { params: query }));
+  unwrap<Paginated<ApplicationView>>(api.get('/applications', { params: cleanParams(query) }));
 
 export const fetchApplication = (id: string) =>
   unwrap<ApplicationDetail>(api.get(`/applications/${encodeURIComponent(id)}`));
 
-export const updateApplicationStatus = (id: string, status: ApplicationStatus, note?: string) =>
-  unwrap<Application>(api.patch(`/applications/${encodeURIComponent(id)}/status`, { status, note }));
+export const updateApplicationStatus = (id: string, status: ApplicationStatus, note?: string, reason?: RejectionReason) =>
+  unwrap<Application>(api.patch(`/applications/${encodeURIComponent(id)}/status`, { status, note, reason }));
+
+export const assignApplication = (id: string, input: AssignmentInput) =>
+  unwrap<ApplicationView>(api.patch(`/applications/${encodeURIComponent(id)}/assign`, input));
+
+export const fetchDuplicates = (query: { phone?: string; consumerNumber?: string }) =>
+  unwrap<DuplicateWarning[]>(api.get('/applications/duplicates', { params: query }));
+
+export function applicationsExportUrl(query: LeadQuery = {}): string {
+  return `/api/applications/export.csv?${new URLSearchParams(cleanParams(query)).toString()}`;
+}

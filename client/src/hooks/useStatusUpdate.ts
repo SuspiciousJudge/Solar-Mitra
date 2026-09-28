@@ -1,24 +1,36 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@/services/api';
+import { updateApplicationStatus } from '@/services/applicationService';
 import { updateLeadStatus } from '@/services/leadService';
-import type { Application, ApplicationStatus } from '@/types';
+import { availableTransitions, isLive, type ApplicationStatus, type Application, type RejectionReason, type UserRole } from '@/types';
+
+interface ChangeOptions {
+  note?: string;
+  reason?: RejectionReason;
+  /** `applications` calls the applications endpoint; `leads` the leads endpoint. */
+  via?: 'leads' | 'applications';
+}
 
 /**
- * Optimistic status change: `apply` updates local UI immediately, and is called
- * again with the previous status if the API call fails.
+ * Status change with an optimistic local update. The server remains the source
+ * of truth: it re-validates the transition and rejects illegal moves, in which
+ * case the previous status is restored.
  */
-export function useStatusUpdate() {
+export function useStatusUpdate(via: 'leads' | 'applications' = 'leads') {
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const changeStatus = useCallback(
-    async (application: Application, status: ApplicationStatus, apply: (id: string, status: ApplicationStatus) => void) => {
+    async (application: Application, status: ApplicationStatus, apply: (id: string, status: ApplicationStatus) => void, options: ChangeOptions = {}) => {
       const previous = application.status;
       apply(application.id, status);
       setPendingId(application.id);
       try {
-        await updateLeadStatus(application.id, status);
-        toast.success(`${application.applicantName} · ${status}`, { description: application.id });
+        const call = (options.via ?? via) === 'applications' ? updateApplicationStatus : updateLeadStatus;
+        const updated = await call(application.id, status, options.note);
+        toast.success(`${application.applicantName} · ${status}`, {
+          description: updated.id ? `${updated.id}${isLive(status) ? ' · now generating clean energy' : ''}` : application.id,
+        });
         return true;
       } catch (error) {
         apply(application.id, previous);
@@ -28,13 +40,26 @@ export function useStatusUpdate() {
         setPendingId(null);
       }
     },
-    [],
+    [via],
   );
 
   return { changeStatus, pendingId };
 }
 
-export const NEXT_STATUS: Partial<Record<ApplicationStatus, { status: ApplicationStatus; label: string }>> = {
-  Approved: { status: 'Installation Scheduled', label: 'Schedule install' },
-  'Installation Scheduled': { status: 'Completed', label: 'Mark completed' },
+/** Transitions the given role may perform next, in flow order. */
+export function nextActionsFor(application: Application, role: UserRole | undefined): ApplicationStatus[] {
+  return availableTransitions({ status: application.status, loanAmount: application.loanAmount }, role);
+}
+
+export const ACTION_LABELS: Partial<Record<ApplicationStatus, string>> = {
+  Approved: 'Approve',
+  Rejected: 'Reject',
+  'Loan Sanctioned': 'Sanction loan',
+  'Loan Disbursed': 'Disburse loan',
+  'Installation Scheduled': 'Schedule install',
+  Installed: 'Mark installed',
+  'Net Meter Commissioned': 'Net meter commissioned',
+  'Subsidy Claimed': 'Subsidy claimed',
+  'Subsidy Credited': 'Credit subsidy',
+  Completed: 'Complete file',
 };

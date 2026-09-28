@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ClipboardList,
   FileText,
+  IndianRupee,
   LayoutDashboard,
   Leaf,
   LogOut,
@@ -25,6 +26,7 @@ const NAV = [
   { to: '/admin/applications', label: 'Applications', icon: FileText },
   { to: '/admin/vendors', label: 'Vendors', icon: Store },
   { to: '/admin/analytics', label: 'Climate Impact', icon: Leaf },
+  { to: '/admin/money-flow', label: 'Money Flow', icon: IndianRupee },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 

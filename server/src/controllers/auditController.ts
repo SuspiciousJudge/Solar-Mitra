@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import { getStore } from '../services/dataStore';
+import { findRegion } from '../data/indiaRegions';
 import { calculateCO2Impact, calculateSolarRecommendation } from '../services/solarCalculator';
 import { notFound } from '../utils/AppError';
 import { sendSuccess } from '../utils/apiResponse';
@@ -9,9 +10,12 @@ import type { auditSchema } from '../validators/schemas';
 export async function createAudit(req: Request, res: Response) {
   const input = req.body as z.infer<typeof auditSchema>;
   const rec = calculateSolarRecommendation(input.monthlyUnits, input.state, input.monthlyBill);
+  const region = findRegion(input.state);
   const audit = await getStore().createAudit({
     userId: input.userId,
     state: input.state,
+    district: input.district ?? region?.districts[0],
+    discom: input.discom,
     monthlyUnits: input.monthlyUnits,
     monthlyBill: input.monthlyBill ?? 0,
     recommendedKW: rec.recommendedKW,

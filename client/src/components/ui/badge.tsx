@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
 import { cn } from '@/utils/cn';
 
-type BadgeVariant = 'green' | 'yellow' | 'gray' | 'red' | 'blue' | 'purple' | 'outline';
+export type BadgeVariant = 'green' | 'yellow' | 'gray' | 'red' | 'blue' | 'purple' | 'outline';
 
 const variants: Record<BadgeVariant, string> = {
   green: 'bg-forest-50 text-forest-800 ring-forest-600/20',

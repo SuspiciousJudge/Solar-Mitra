@@ -7,8 +7,13 @@ export interface LeadDoc {
   name: string;
   phone: string;
   state: string;
+  district?: string;
+  discom?: string;
+  assignedToUserId?: string;
+  assignedToName?: string;
   source: 'consumer-app' | 'field-agent' | 'seed';
   status: ApplicationStatus;
+  updatedAt?: Date;
 }
 
 const leadSchema = new Schema<LeadDoc>(
@@ -16,7 +21,11 @@ const leadSchema = new Schema<LeadDoc>(
     applicationId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     phone: { type: String, required: true },
-    state: { type: String, required: true },
+    state: { type: String, required: true, index: true },
+    district: { type: String },
+    discom: { type: String },
+    assignedToUserId: { type: String, index: true },
+    assignedToName: { type: String },
     source: { type: String, enum: ['consumer-app', 'field-agent', 'seed'], default: 'consumer-app' },
     status: { type: String, enum: APPLICATION_STATUSES, default: 'Pending Verification' },
   },

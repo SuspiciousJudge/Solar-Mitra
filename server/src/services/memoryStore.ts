@@ -1,23 +1,38 @@
 import bcrypt from 'bcryptjs';
 import { env } from '../config/env';
-import { createSeedApplications, createSeedVendors } from '../data/mockDatabase';
-import type { Application, SolarAudit, UserRecord, Vendor } from '../types';
-import { generateApplicationId, generateAuditId } from '../utils/ids';
-import { filterVendors, STATUS_NOTES, type DataStore } from './dataStore';
+import { SEED_USERS } from '../data/historicalSeed';
+import { createFullSeed } from '../data/mockDatabase';
+import { TRANSACTION_DIRECTIONS, type Application, type SolarAudit, type Transaction, type UserRecord, type Vendor } from '../types';
+import { generateApplicationId, generateAuditId, generateTransactionId } from '../utils/ids';
+import { filterVendors, type DataStore } from './dataStore';
 
 interface MemoryState {
   vendors: Vendor[];
   applications: Application[];
   audits: SolarAudit[];
+  transactions: Transaction[];
   users: UserRecord[];
 }
 
+/** Seeded operator accounts — the admin entry honours ADMIN_EMAIL/ADMIN_PASSWORD. */
+export function buildUsers(adminHash: string): UserRecord[] {
+  return SEED_USERS.map((user) => ({
+    id: user.id,
+    name: user.name,
+    email: (user.role === 'admin' ? env.adminEmail : user.email).toLowerCase(),
+    passwordHash: user.role === 'admin' ? adminHash : bcrypt.hashSync(user.password, 10),
+    role: user.role,
+  }));
+}
+
 function freshState(adminHash: string): MemoryState {
+  const seed = createFullSeed();
   return {
-    vendors: createSeedVendors(),
-    applications: createSeedApplications(),
-    audits: [],
-    users: [{ id: 'U-ADMIN', name: 'Demo Operator', email: env.adminEmail.toLowerCase(), passwordHash: adminHash, role: 'admin' }],
+    vendors: seed.vendors,
+    applications: seed.applications,
+    audits: seed.audits,
+    transactions: seed.transactions,
+    users: buildUsers(adminHash),
   };
 }
 
@@ -54,16 +69,20 @@ export function createMemoryStore(): DataStore {
       const audit = state.audits.find((a) => a.id === id);
       return audit ? clone(audit) : null;
     },
+    async listAudits() {
+      return clone(state.audits);
+    },
     async createApplication(input) {
       const now = new Date().toISOString();
       const id = generateApplicationId(new Set(state.applications.map((a) => a.id)));
       const application: Application = {
         ...input,
         id,
+        paymentMode: input.loanAmount > 0 ? 'loan' : 'upfront',
         status: 'Pending Verification',
         timeline: [
-          { status: 'Submitted', note: 'Application submitted via SolarMitra', at: now },
-          { status: 'Pending Verification', note: STATUS_NOTES['Pending Verification'], at: now },
+          { status: 'Submitted', note: 'Application submitted via SolarMitra', at: now, byName: 'Consumer app' },
+          { status: 'Pending Verification', note: 'Documents queued for verification', at: now },
         ],
         isSeed: false,
         createdAt: now,
@@ -79,13 +98,35 @@ export function createMemoryStore(): DataStore {
       const app = state.applications.find((a) => a.id === id);
       return app ? withVendorName(app) : null;
     },
-    async updateApplicationStatus(id, status, note) {
+    async updateApplicationStatus({ id, status, event }) {
       const app = state.applications.find((a) => a.id === id);
       if (!app) return null;
-      const now = new Date().toISOString();
       app.status = status;
-      app.updatedAt = now;
-      app.timeline.push({ status, note: note || STATUS_NOTES[status], at: now });
+      app.updatedAt = event.at;
+      app.timeline.push(clone(event));
+      return withVendorName(app);
+    },
+    async assignApplication(id, assignment) {
+      const app = state.applications.find((a) => a.id === id);
+      if (!app) return null;
+      app.assignedTo = assignment ? clone(assignment) : undefined;
+      app.updatedAt = assignment?.at ?? new Date().toISOString();
+      return withVendorName(app);
+    },
+    async applyRepayment(id, dpd) {
+      const app = state.applications.find((a) => a.id === id);
+      if (!app) return null;
+      const repayment = app.repayment ?? { emisDue: 0, paidOnTime: 0, paidLate: 0, paid30PlusDpd: 0, outstandingPrincipal: app.loanAmount };
+      repayment.emisDue += 1;
+      if (dpd > 0) {
+        repayment.paidLate += 1;
+        if (dpd >= 30) repayment.paid30PlusDpd += 1;
+      } else {
+        repayment.paidOnTime += 1;
+      }
+      const principalPerEmi = app.tenureMonths > 0 ? app.loanAmount / app.tenureMonths : app.loanAmount;
+      repayment.outstandingPrincipal = Math.max(0, Math.round(repayment.outstandingPrincipal - principalPerEmi));
+      app.repayment = repayment;
       return withVendorName(app);
     },
     async findUserByEmail(email) {
@@ -93,6 +134,24 @@ export function createMemoryStore(): DataStore {
     },
     async findUserById(id) {
       return state.users.find((u) => u.id === id) ?? null;
+    },
+    async listUsers() {
+      return clone(state.users);
+    },
+    async listTransactions() {
+      return clone(state.transactions);
+    },
+    async createTransaction(input) {
+      const { applicantName, ...rest } = input;
+      const transaction: Transaction = {
+        ...rest,
+        id: generateTransactionId(),
+        direction: TRANSACTION_DIRECTIONS[input.kind],
+        applicantName: applicantName ?? '',
+        isSeed: false,
+      };
+      state.transactions.unshift(transaction);
+      return clone(transaction);
     },
     async reset() {
       state = freshState(adminHash);

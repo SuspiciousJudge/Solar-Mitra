@@ -1,14 +1,23 @@
-export const APPLICATION_STATUSES = [
-  'Pending Verification',
-  'Approved',
-  'Rejected',
-  'Installation Scheduled',
-  'Completed',
-] as const;
+import type { ApplicationStatus, RejectionReason, UserRole } from '../config/statusFlow';
+import type { AgeingView } from '../utils/ageing';
 
-export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+export {
+  APPLICATION_STATUSES,
+  MILESTONE_ORDER,
+  REJECTION_REASONS,
+  STATUS_FLOW,
+  TRANSITION_LABELS,
+  TRANSITION_ROLES,
+  availableTransitions,
+  canTransition,
+  hasReached,
+  isLive,
+  milestoneAt,
+  nextStatuses,
+} from '../config/statusFlow';
+export type { ApplicationStatus, RejectionReason, UserRole } from '../config/statusFlow';
 
-export type UserRole = 'admin' | 'agent' | 'consumer';
+export type PaymentMode = 'loan' | 'upfront';
 
 export interface UserRecord {
   id: string;
@@ -25,6 +34,7 @@ export interface Vendor {
   name: string;
   location: string;
   state: string;
+  district?: string;
   rating: number;
   distanceKm: number;
   installations: number;
@@ -40,6 +50,8 @@ export interface SolarAudit {
   id: string;
   userId?: string;
   state: string;
+  district?: string;
+  discom?: string;
   monthlyUnits: number;
   monthlyBill: number;
   recommendedKW: number;
@@ -53,18 +65,55 @@ export interface SolarAudit {
   createdAt: string;
 }
 
+/** Audit-trail entry: who changed what, when, and why. */
 export interface TimelineEvent {
   status: ApplicationStatus | 'Submitted';
   note: string;
   at: string;
+  byUserId?: string;
+  byName?: string;
+  role?: UserRole;
+  reason?: RejectionReason;
+}
+
+export interface Assignment {
+  userId: string;
+  name: string;
+  at: string;
+  byUserId?: string;
+  byName?: string;
+}
+
+/** Aggregated repayment state for a financed application (demo modelling). */
+export interface RepaymentState {
+  emisDue: number;
+  paidOnTime: number;
+  paidLate: number;
+  paid30PlusDpd: number;
+  outstandingPrincipal: number;
+}
+
+export type { AgeingView } from '../utils/ageing';
+
+export interface DuplicateWarning {
+  applicationId: string;
+  applicantName: string;
+  status: ApplicationStatus;
+  matchedOn: 'phone' | 'consumer number';
+  value: string;
+  assignedTo?: string;
 }
 
 export interface Application {
   id: string;
   applicantName: string;
   phone: string;
+  /** DISCOM consumer number — used for duplicate detection. */
+  consumerNumber?: string;
   location: string;
   state: string;
+  district?: string;
+  discom?: string;
   auditId?: string;
   monthlyUnits: number;
   monthlyBill: number;
@@ -78,24 +127,98 @@ export interface Application {
   interestRate: number;
   tenureMonths: number;
   emi: number;
+  paymentMode: PaymentMode;
+  schemeIds: string[];
   vendorId: string;
   vendorName?: string;
   status: ApplicationStatus;
   timeline: TimelineEvent[];
+  assignedTo?: Assignment;
+  repayment?: RepaymentState;
+  estimatedMonthlyGeneration: number;
+  estimatedMonthlySavings: number;
   isSeed: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
+/** Application payload as returned by the API (adds derived fields). */
+export interface ApplicationView extends Application {
+  ageing: AgeingView;
+  duplicates?: DuplicateWarning[];
+}
+
+export type TransactionKind =
+  | 'Loan Sanctioned'
+  | 'Loan Disbursed'
+  | 'EMI Repayment'
+  | 'Subsidy Claimed'
+  | 'Subsidy Credited'
+  | 'Consumer Upfront Payment'
+  | 'Vendor Payout';
+
+export type TransactionDirection = 'inflow' | 'outflow' | 'none';
+
+export const TRANSACTION_DIRECTIONS: Record<TransactionKind, TransactionDirection> = {
+  'Loan Sanctioned': 'none',
+  'Loan Disbursed': 'outflow',
+  'EMI Repayment': 'inflow',
+  'Subsidy Claimed': 'inflow',
+  'Subsidy Credited': 'inflow',
+  'Consumer Upfront Payment': 'inflow',
+  'Vendor Payout': 'outflow',
+};
+
+export const TRANSACTION_KINDS = Object.keys(TRANSACTION_DIRECTIONS) as TransactionKind[];
+
+export interface Transaction {
+  id: string;
+  applicationId: string;
+  applicantName: string;
+  kind: TransactionKind;
+  direction: TransactionDirection;
+  amountINR: number;
+  /** Days past due — only meaningful for EMI repayments (0 = on time). */
+  dpd?: number;
+  state: string;
+  district?: string;
+  discom?: string;
+  schemeIds: string[];
+  vendorId?: string;
+  paymentMode: PaymentMode;
+  reference?: string;
+  note?: string;
+  at: string;
+  byUserId: string;
+  byName: string;
+  role: UserRole;
+  isSeed: boolean;
+}
+
+export type NewTransactionInput = Omit<Transaction, 'id' | 'direction' | 'applicantName' | 'isSeed'> & {
+  applicantName?: string;
+};
+
 export interface VendorFilter {
   state?: string;
+  district?: string;
+  discom?: string;
   active?: boolean;
   search?: string;
 }
 
 export type NewApplicationInput = Omit<
   Application,
-  'id' | 'status' | 'timeline' | 'isSeed' | 'createdAt' | 'updatedAt' | 'vendorName'
->;
+  'id' | 'status' | 'timeline' | 'isSeed' | 'createdAt' | 'updatedAt' | 'vendorName' | 'paymentMode' | 'ageing'
+> &
+  Partial<Pick<Application, 'paymentMode'>>;
 
 export type NewAuditInput = Omit<SolarAudit, 'id' | 'createdAt'>;
+
+export interface StatusUpdateInput {
+  id: string;
+  status: ApplicationStatus;
+  note?: string;
+  reason?: RejectionReason;
+  actor: { userId: string; name: string; role: UserRole };
+}

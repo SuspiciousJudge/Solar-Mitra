@@ -1,19 +1,22 @@
 import { Schema, model } from 'mongoose';
 
 export interface UserDoc {
+  /** Stable operator code (U-ADMIN, U-AGENT-1, …) — used by the audit trail. */
+  code: string;
   name: string;
   email: string;
   password: string;
-  role: 'admin' | 'agent' | 'consumer';
+  role: 'admin' | 'agent' | 'finance' | 'consumer';
 }
 
 const userSchema = new Schema<UserDoc>(
   {
+    code: { type: String, unique: true, sparse: true },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     // Stores the bcrypt hash — never the plain-text password.
     password: { type: String, required: true, select: false },
-    role: { type: String, enum: ['admin', 'agent', 'consumer'], default: 'consumer' },
+    role: { type: String, enum: ['admin', 'agent', 'finance', 'consumer'], default: 'consumer' },
   },
   { timestamps: true },
 );
