@@ -22,15 +22,15 @@ Rural and semi-urban households spend a large share of their income on electrici
 
 ## 2. The solution
 
-**For households:** electricity bill → solar plan → subsidy → affordable EMI → verified installer → tracked application.
+A guided eight-stage flow goes from **electricity details → personal & KYC → property → solar preferences → solar plan → financing → verified installer → review & tracking**:
 
 1. **Pick a language**: English, हिंदी, ગુજરાતી, தமிழ் (saved on the device)
-2. **Upload a bill**: simulated OCR fills state, units and bill amount; every value stays editable
-3. **See the plan**: recommended kW, system cost, central + state subsidy, net cost, monthly savings
-4. **Trace the subsidy**: every rupee is shown against the named central/state scheme it comes from
-5. **Choose how to pay**: upfront, or a Satin Finserv EMI compared side by side with today's bill, plus an EMI simulator
-6. **Pick a partner**: nearby MNRE-empanelled, verified installers
-7. **Book & apply**: get an application ID (`SM-2026-XXXX`) and a live status tracker
+2. **Enter electricity details**: choose simulated bill OCR or enter units, state, and bill manually
+3. **Add personal and property details**: review each stage separately; progress is saved on the device
+4. **Explore a solar plan**: compare neighboring system sizes with configured costs, central/state support, contribution, savings, and environmental estimates
+5. **Choose payment terms**: compare upfront payment with 12-, 24-, and 36-month illustrative financing
+6. **Select an installer and submit**: review the application and required consents before submission
+7. **Track the application**: see its privacy-safe status timeline; operators can review application details in the admin console
 
 **For operators:** one console where the same filters drive every KPI, chart, table and CSV export — so the numbers can never disagree.
 
@@ -133,25 +133,25 @@ No secrets are committed. `.env` files are git-ignored.
 
 ---
 
-## 5. Five-minute demo script
+## 5. Demo values and checks
 
-1. **Landing** → *Start My Solar Audit*
-2. **Language** → choose **हिंदी** (the whole consumer flow switches; change it any time from the top bar)
-3. **Onboarding** → 3 short steps (Next / Back / Skip)
-4. **Audit** → *Upload bill* → the simulated OCR reads **Uttar Pradesh · 350 kWh · ₹2,800** (labelled *Demo OCR Data*)
-5. **Subsidy** → **3 kW** · ₹1,65,000 − ₹78,000 central − ₹30,000 state (UP top-up) = **₹57,000** · saves ~₹2,800/month. The **scheme stack** below lists *PM Surya Ghar: Muft Bijli Yojana* and *UP Rooftop Solar Top-up* — tap a chip to see its slabs, eligibility and how the money is disbursed.
-6. **Financing** → toggle *Upfront* / *Satin Finserv EMI* → **₹57,000 @ 7.5% × 36 months ≈ ₹1,773/month**. The chart compares ₹2,800 today, ~₹1,773 EMI and ₹0 after the loan. Try the EMI simulator sliders.
-7. **Vendors** → verified partners near Kanpur → *View details* → *Select* → fill in name/phone → **Book Installation & Apply for Loan**
-8. **Success** → confetti, application ID, timeline → *Track My Application* (public, privacy-safe status endpoint)
-9. **Operator console** → `/admin/login` → *Use demo credentials* (admin) → **Dashboard**
-10. **Dashboard** (default period = last 30 days, data as of **26 Sept 2026**):
-    - Cumulative: **579 systems live · 1.64 MW · 1,651 t CO₂ avoided (≈78,600 trees) · ₹4.53 Cr disbursed · ₹2.06 Cr subsidy credited**
-    - Period: **₹76.3 L disbursed · 84.8% EMIs on time · 7.6% at 30+ DPD · 90 files pending, oldest 10d 10h, 54 past the 48h SLA**
-    - **Funnel** (monotonic, applications touched in the period): audits 708 → applications 605 → approved 500 → installed 279 → commissioned 208 → subsidy credited 70, with the financed loan branch shown underneath (217 of 353 disbursed)
-11. **Filter bar** → pick **State: Uttar Pradesh**, **Scheme: up-rts-topup**, **Payment: Financed**. Every KPI, chart, the funnel, the tables and the CSV exports re-query the same filter — and the URL carries the slice, so you can share or reload it.
-12. **Leads** → your new application is at the top with a **New** badge → **Assign to me** → **Approve**. Watch the dashboard KPIs and the consumer tracker follow. Then sign in as `finance@solarmitra.demo` and **Sanction → Disburse** the same file: the agent role cannot do this (the API answers 403/409), the money-flow ledger shows the disbursement.
-13. **Money flow** → filter by *Loan Disbursed*, export the CSV, open an application and see its money trail and repayment health.
-14. **Settings → Reset demo data** restores everything for the next run.
+Run with the default `DEMO_MODE=true` setting; MongoDB and API keys are not needed. The consumer journey starts with synthetic values already filled in, so you can press **Continue** through the stages without entering test data.
+
+| Field | Default demo value |
+| --- | --- |
+| Electricity | Uttar Pradesh · 350 kWh/month · ₹2,800/month |
+| Consumer / DISCOM | `DEMO-0001` · Demo DISCOM |
+| Personal | Demo Household · `9876543210` · `demo@example.test` · `1990-01-01` |
+| KYC | Other accepted ID · `DEMO-ID-001` (demo collection only) |
+| Property | Demo Solar Street, Kanpur · Uttar Pradesh · `208001` |
+| Solar | 3 kW recommended · battery No · financing · 36 months |
+| Installer | First active vendor for Uttar Pradesh (selected after the installer list loads) |
+
+The values are editable. At the final review, tick both consent boxes to enable submission. If you switch the KYC type to Aadhaar or PAN, enter a synthetic test value in the expected format; never use a real identity number. No KYC number or selected document/photo file is sent to the API. Bill OCR remains simulated.
+
+For a full run: start with `npm run dev`, visit <http://localhost:5173/>, continue through all eight stages, submit, check the status from **Track My Application**, then open <http://localhost:5173/admin/login> and use **Use demo credentials** to inspect and update the application. **Settings → Reset demo data** clears the current run. In-memory application data also resets when the server restarts.
+
+Run `npm test` and `npm run build` from the repository root to check the calculator/API tests and both production builds. The public tracking endpoint returns only the privacy-safe status view; application journey details are available only through authenticated admin routes. DOB is excluded from the browser draft and masked by default in admin.
 
 ---
 

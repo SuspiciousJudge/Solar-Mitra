@@ -4,7 +4,7 @@
   "private": true,
   "description": "SolarMitra — clean-energy & green-finance platform (SANKALP by Satin Finserv — The Climate Edition)",
   "scripts": {
-    "postinstall": "npm install --prefix server && npm install --prefix client",
+    "postinstall": "npm --prefix server install --ignore-scripts && npm --prefix client install --ignore-scripts",
     "dev": "concurrently -n server,client -c green,yellow \"npm run server\" \"npm run client\"",
     "client": "npm --prefix client run dev",
     "server": "npm --prefix server run dev",

@@ -13,7 +13,7 @@ function lazyNamed<T extends Record<string, ComponentType>>(loader: () => Promis
 
 const LanguageSelectPage = lazyNamed(() => import('@/pages/consumer/LanguageSelectPage'), 'LanguageSelectPage');
 const OnboardingPage = lazyNamed(() => import('@/pages/consumer/OnboardingPage'), 'OnboardingPage');
-const AuditPage = lazyNamed(() => import('@/pages/consumer/AuditPage'), 'AuditPage');
+const GuidedJourneyPage = lazyNamed(() => import('@/pages/consumer/GuidedJourneyPage'), 'GuidedJourneyPage');
 const SubsidyPage = lazyNamed(() => import('@/pages/consumer/SubsidyPage'), 'SubsidyPage');
 const FinancingPage = lazyNamed(() => import('@/pages/consumer/FinancingPage'), 'FinancingPage');
 const VendorsPage = lazyNamed(() => import('@/pages/consumer/VendorsPage'), 'VendorsPage');
@@ -45,7 +45,7 @@ export default function App() {
           <Route path="/consumer" element={<ConsumerLayout />}>
             <Route index element={<LanguageSelectPage />} />
             <Route path="onboarding" element={<OnboardingPage />} />
-            <Route path="audit" element={<AuditPage />} />
+            <Route path="audit" element={<GuidedJourneyPage />} />
             <Route path="subsidy" element={<SubsidyPage />} />
             <Route path="financing" element={<FinancingPage />} />
             <Route path="vendors" element={<VendorsPage />} />

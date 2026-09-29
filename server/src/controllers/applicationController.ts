@@ -3,17 +3,41 @@ import type { z } from 'zod';
 import { defaultSchemeIdsForState } from '../config/subsidySchemes';
 import { getValidatedQuery } from '../middleware/validate';
 import { getStore } from '../services/dataStore';
+
 import { findDuplicates } from '../services/duplicates';
-import { matchesAttributes, toRecordFilters, type RawFilterQuery } from '../services/filters';
-import { buildDuplicateMap, queryLeads, toApplicationView, type LeadQuery } from '../services/leadQuery';
-import { calculateLoanSummary, calculateMonthlySavings, calculateSolarRecommendation } from '../services/solarCalculator';
+import {
+  matchesAttributes,
+  toRecordFilters,
+  type RawFilterQuery,
+} from '../services/filters';
+import {
+  buildDuplicateMap,
+  queryLeads,
+  toApplicationView,
+  type LeadQuery,
+} from '../services/leadQuery';
+import {
+  calculateLoanSummary,
+  calculateMonthlySavings,
+  calculateMonthlyGeneration,
+  calculateSolarRecommendation,
+  calculateMarketCost,
+  calculateSubsidy,
+  calculateNetCost,
+} from '../services/solarCalculator';
+import { DEMO_POLICY } from '../config/policyConfig';
 import { assertCanAssign, planStatusChange } from '../services/statusMachine';
 import { csvFilename, sendCsv, toCsv } from '../services/csv';
+
 import { AppError, notFound } from '../utils/AppError';
 import { sendSuccess } from '../utils/apiResponse';
 import { findRegion } from '../data/indiaRegions';
 import type { Application } from '../types';
-import type { createApplicationSchema, statusUpdateSchema, assignSchema } from '../validators/schemas';
+import type {
+  createApplicationSchema,
+  statusUpdateSchema,
+  assignSchema,
+} from '../validators/schemas';
 
 export async function createApplication(req: Request, res: Response) {
   const input = req.body as z.infer<typeof createApplicationSchema>;
@@ -24,7 +48,21 @@ export async function createApplication(req: Request, res: Response) {
   if (!vendor.active) throw new AppError(400, 'The selected vendor is not accepting new installations');
 
   // Figures are recomputed server-side so the stored application never trusts client maths.
-  const rec = calculateSolarRecommendation(input.monthlyUnits, input.state, input.monthlyBill);
+  const recommendation = calculateSolarRecommendation(input.monthlyUnits, input.state, input.monthlyBill);
+  const selectedKW = input.selectedKW ?? recommendation.recommendedKW;
+  if (selectedKW < 1 || selectedKW > DEMO_POLICY.maxRecommendedKW) throw new AppError(400, 'Selected system size is not supported');
+  const marketCost = calculateMarketCost(selectedKW);
+  const subsidy = calculateSubsidy(selectedKW, input.state, marketCost);
+  const selectedMonthlyGeneration = calculateMonthlyGeneration(selectedKW);
+  const rec = {
+    ...recommendation,
+    recommendedKW: selectedKW,
+    marketCost,
+    ...subsidy,
+    netCost: calculateNetCost(marketCost, subsidy.totalSubsidy),
+    estimatedMonthlyGeneration: selectedMonthlyGeneration,
+    estimatedMonthlySavings: calculateMonthlySavings(input.monthlyUnits, input.monthlyBill, selectedMonthlyGeneration),
+  };
   if (input.loanAmount > rec.netCost) throw new AppError(400, 'Loan amount cannot exceed the estimated net cost');
   const hasLoan = input.loanAmount > 0;
   const loan = calculateLoanSummary(input.loanAmount, input.interestRate, input.tenureMonths);
@@ -56,8 +94,14 @@ export async function createApplication(req: Request, res: Response) {
     emi: loan.emi,
     schemeIds: defaultSchemeIdsForState(input.state),
     vendorId: vendor.id,
+    selectedKW,
+    preferredDate: input.preferredDate,
+    preferredTime: input.preferredTime,
+    installerNote: input.note,
+    consentGiven: input.consentGiven,
+    journey: input.journey,
     estimatedMonthlyGeneration: rec.estimatedMonthlyGeneration,
-    estimatedMonthlySavings: calculateMonthlySavings(input.monthlyUnits, input.monthlyBill, rec.estimatedMonthlyGeneration),
+    estimatedMonthlySavings: rec.estimatedMonthlySavings,
   });
 
   // Duplicates never block a submission — the operator sees the warning and decides.

@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Banknote, CircleCheckBig, Clock, IndianRupee, MapPin, Phone, ShieldCheck, Star, TrendingUp, User, UserPlus, Zap } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Banknote, CalendarCheck, CircleCheckBig, Clock, IndianRupee, MapPin, Phone, ShieldCheck, Star, TrendingUp, User, UserPlus, Zap } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -52,6 +52,7 @@ export function ApplicationDetailPage() {
   useDocumentTitle(id);
   const { user } = useAuth();
   const query = useAsync(() => fetchApplication(id), [id]);
+  const [showDateOfBirth, setShowDateOfBirth] = useState(false);
   const trail = useAsync(() => fetchTransactions({ search: id, limit: 50 }), [id]);
   const { changeStatus, pendingId } = useStatusUpdate('applications');
   const [rejecting, setRejecting] = useState(false);
@@ -204,26 +205,37 @@ export function ApplicationDetailPage() {
 
           <Section title="Applicant" icon={<User className="h-4 w-4" aria-hidden="true" />}>
             <Item label="Name" value={app.applicantName} />
-            <Item
-              label="Phone"
-              value={
-                <span className="inline-flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />+91 {app.phone}
-                </span>
-              }
-            />
-            <Item
-              label="Location"
-              value={
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-                  {app.location}
-                </span>
-              }
-            />
-            <Item label="District / discom" value={`${app.district ?? '—'}${app.discom ? ` · ${app.discom}` : ''}`} />
+            <Item label="Phone" value={<span className="inline-flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />+91 {app.phone}</span>} />
+            <Item label="Location" value={<span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />{app.location}</span>} />
+            <Item label="State" value={app.state} />
+            {app.journey?.personal?.email && <Item label="Email" value={app.journey.personal.email} />}
+            {app.journey?.personal?.alternateMobile && <Item label="Alternate phone" value={app.journey.personal.alternateMobile} />}
+            {app.journey?.personal?.dateOfBirth && <Item label="Date of birth" value={<button type="button" className="underline decoration-dotted" onClick={() => setShowDateOfBirth((shown) => !shown)}>{showDateOfBirth ? app.journey.personal.dateOfBirth : '•••••••• (show)'}</button>} />}
           </Section>
-
+          {app.journey?.electricity && <Section title="Electricity connection" icon={<Zap className="h-4 w-4" aria-hidden="true" />}>
+            <Item label="Consumer name" value={app.journey.electricity.consumerName || '—'} />
+            <Item label="Consumer number" value={app.journey.electricity.consumerNumber || '—'} />
+            <Item label="DISCOM" value={app.journey.electricity.discom || '—'} />
+            <Item label="Meter / connection" value={[app.journey.electricity.meterNumber, app.journey.electricity.connectionType].filter(Boolean).join(' · ') || '—'} />
+            <Item label="Sanctioned load" value={app.journey.electricity.sanctionedLoad || '—'} />
+            <Item label="Billing period" value={app.journey.electricity.billingPeriod || '—'} />
+          </Section>}
+          {app.journey?.kyc && <Section title="KYC" icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}>
+            <Item label="Document type" value={app.journey.kyc.documentType || '—'} />
+            <Item label="Document status" value={app.journey.kyc.documentStatus === 'demo-collection-only' ? 'Demo collection only · not verified' : 'Not verified'} />
+          </Section>}
+          {app.journey?.property && <Section title="Property & installation" icon={<MapPin className="h-4 w-4" aria-hidden="true" />}>
+            <Item label="Ownership" value={app.journey.property.ownership || '—'} />
+            <Item label="Address" value={[app.journey.property.addressLine1, app.journey.property.addressLine2, app.journey.property.city, app.journey.property.district, app.journey.property.state, app.journey.property.pinCode].filter(Boolean).join(', ')} />
+            <Item label="Roof type" value={app.journey.property.roofType || '—'} />
+            <Item label="Roof area" value={app.journey.property.roofArea ? `${formatNumber(app.journey.property.roofArea)} sq ft` : 'Not provided'} />
+            <Item label="Shading" value={app.journey.property.shaded || '—'} />
+            <Item label="Installation permission" value={app.journey.property.permission ? 'Confirmed' : 'Not confirmed'} />
+          </Section>}
+          {app.journey?.solar && <Section title="Solar preferences" icon={<Zap className="h-4 w-4" aria-hidden="true" />}>
+            <Item label="Battery preference" value={app.journey.solar.batteryPreference || '—'} />
+            <Item label="Payment preference" value={app.journey.solar.paymentPreference || '—'} />
+          </Section>}
           <Section title="Energy profile" icon={<Zap className="h-4 w-4" aria-hidden="true" />}>
             <Item label="Monthly units" value={`${formatNumber(app.monthlyUnits)} kWh`} />
             <Item label="Monthly bill" value={app.monthlyBill > 0 ? formatINR(app.monthlyBill) : 'Not provided'} />
@@ -274,6 +286,12 @@ export function ApplicationDetailPage() {
               )}
             </div>
           </Section>
+          {app.journey?.booking && <Section title="Installer booking" icon={<CalendarCheck className="h-4 w-4" aria-hidden="true" />}>
+            <Item label="Preferred date" value={app.journey.booking.preferredDate || '—'} />
+            <Item label="Preferred time" value={app.journey.booking.preferredTime || '—'} />
+            <Item label="Customer note" value={app.journey.booking.note || '—'} />
+            <Item label="Consents recorded" value={app.journey.booking.consentGiven ? 'Yes' : 'No'} />
+          </Section>}
 
           <Disclaimer>
             Illustrative financing calculation. Final loan eligibility, interest rate, tenure, subsidy eligibility, and repayment terms are subject to applicable policies and lender approval. Subsidy values use demo policy assumptions.

@@ -106,10 +106,10 @@ describe('vendors & audits', () => {
     expect(INDIA_REGIONS.find((region) => region.name === 'Uttar Pradesh')?.districts).toContain(res.body.data.audit.district);
   });
 
-  it('rejects 0 units', async () => {
+  it('accepts 0 units and returns a zero recommendation', async () => {
     const res = await request(app).post('/api/audits').send({ state: 'Uttar Pradesh', monthlyUnits: 0 });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe('Monthly consumption must be greater than 0');
+    expect(res.status).toBe(201);
+    expect(res.body.data.recommendation.recommendedKW).toBe(0);
   });
 });
 
@@ -128,6 +128,17 @@ describe('applications & leads', () => {
     const res = await request(app).post('/api/applications').send({ ...validApplication, loanAmount: 0, tenureMonths: 0, paymentMode: undefined });
     expect(res.body.data.paymentMode).toBe('upfront');
     expect(res.body.data.emi).toBe(0);
+  });
+
+  it('recomputes cost and support for a selected alternative system size', async () => {
+    const res = await request(app).post('/api/applications').send({ ...validApplication, selectedKW: 4, loanAmount: 20000 });
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ systemKW: 4, marketCost: 215000, centralSubsidy: 78000, stateSubsidy: 30000, netCost: 107000 });
+  });
+
+  it('rejects unsupported selected system sizes', async () => {
+    const res = await request(app).post('/api/applications').send({ ...validApplication, selectedKW: 11 });
+    expect(res.status).toBe(400);
   });
 
   it('rejects invalid phone numbers', async () => {

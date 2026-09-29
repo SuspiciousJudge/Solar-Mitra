@@ -105,6 +105,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const completeOnboarding = useCallback(() => setState((prev) => ({ ...prev, onboardingComplete: true })), []);
   const resetConsumer = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('solarmitra.guided-draft');
     setState(EMPTY_STATE);
   }, []);
 

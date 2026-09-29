@@ -80,6 +80,12 @@ function toApplication(doc: ApplicationDoc, vendorNames: Map<string, string>): A
     paymentMode: doc.paymentMode ?? (doc.loanAmount > 0 ? 'loan' : 'upfront'),
     schemeIds: [...(doc.schemeIds ?? [])],
     vendorId: doc.vendorId,
+    selectedKW: doc.selectedKW,
+    preferredDate: doc.preferredDate,
+    preferredTime: doc.preferredTime,
+    installerNote: doc.installerNote,
+    consentGiven: doc.consentGiven,
+    journey: doc.journey,
     vendorName: vendorNames.get(doc.vendorId),
     status: doc.status,
     timeline: (doc.timeline ?? []).map((e) => ({
