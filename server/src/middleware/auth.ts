@@ -30,4 +30,5 @@ export const requireRole =
     return next();
   };
 
-export const requireOperator: RequestHandler[] = [requireAuth, requireRole('admin', 'agent')];
+/** Any desk that can open the operator console (admin, field agent, finance). */
+export const requireOperator: RequestHandler[] = [requireAuth, requireRole('admin', 'agent', 'finance')];

@@ -6,6 +6,7 @@ import { PolicyNotice } from '@/components/consumer/PolicyNotice';
 import { RequireBill } from '@/components/consumer/RequireBill';
 import { ScreenHeading } from '@/components/consumer/ScreenHeading';
 import { StickyActions } from '@/components/consumer/StickyActions';
+import { SchemeStack } from '@/components/consumer/SchemeStack';
 import { SubsidyBreakdown } from '@/components/consumer/SubsidyBreakdown';
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { Disclaimer } from '@/components/shared/Disclaimer';
@@ -67,6 +68,8 @@ function SubsidyContent() {
         )}
 
         <SubsidyBreakdown recommendation={rec} />
+
+        <SchemeStack state={billData.state} recommendation={rec} />
 
         <motion.div
           className="flex items-center gap-4 rounded-3xl border-2 border-solar-300 bg-solar-50 p-4"

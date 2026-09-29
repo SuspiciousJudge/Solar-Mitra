@@ -2,14 +2,14 @@ import { ArrowRight, Banknote, CloudOff, Home, SolarPanel, Zap } from 'lucide-re
 import type { AnalyticsOverview } from '@/types';
 import { formatCapacity, formatINRCompact, formatNumber } from '@/utils/format';
 
-/** More households → more capacity → more clean electricity → lower emissions → more green finance. */
+/** Households → capacity → clean electricity → lower emissions → green finance. */
 export function ImpactStory({ overview }: { overview: AnalyticsOverview }) {
   const steps = [
-    { icon: Home, label: 'More households', value: formatNumber(overview.households) },
-    { icon: SolarPanel, label: 'More solar capacity', value: formatCapacity(overview.capacityKW) },
-    { icon: Zap, label: 'More clean electricity', value: `${formatNumber(overview.annualCleanEnergyMWh)} MWh/yr` },
-    { icon: CloudOff, label: 'Lower estimated emissions', value: `${formatNumber(overview.co2OffsetTonnes)} t CO₂` },
-    { icon: Banknote, label: 'More green financing', value: formatINRCompact(overview.loansDisbursedINR) },
+    { icon: Home, label: 'Households transitioned', value: formatNumber(overview.climate.systemsLive) },
+    { icon: SolarPanel, label: 'Clean energy capacity', value: formatCapacity(overview.climate.installedKW) },
+    { icon: Zap, label: 'Clean electricity / year', value: `${formatNumber(overview.climate.estAnnualMWh)} MWh` },
+    { icon: CloudOff, label: 'Estimated CO₂ avoided', value: `${formatNumber(overview.climate.co2AvoidedTonnes)} t` },
+    { icon: Banknote, label: 'Green loans disbursed', value: formatINRCompact(overview.finance.disbursed.amountINR) },
   ];
   return (
     <ol className="grid gap-2 md:grid-cols-5">

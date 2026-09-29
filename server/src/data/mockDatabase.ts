@@ -1,6 +1,15 @@
-import { DEMO_FINANCING } from '../config/policyConfig';
-import { calculateLoanSummary, calculateSolarRecommendation } from '../services/solarCalculator';
-import type { Application, ApplicationStatus, TimelineEvent, Vendor } from '../types';
+/**
+ * DEMO SEED — vendors and the handwritten "story" leads.
+ *
+ * The bulk of the analytics history is generated deterministically by
+ * `historicalSeed.ts`; the leads below are the fixed, human-readable examples
+ * used in the demo script (UP · 350 kWh → 3 kW → ₹57,000 net → EMI ≈ ₹1,773).
+ */
+import { defaultSchemeIdsForState } from '../config/subsidySchemes';
+import { calculateLoanSummary, calculateMonthlySavings, calculateSolarRecommendation } from '../services/solarCalculator';
+import type { Application, ApplicationStatus, SolarAudit, TimelineEvent, Transaction, Vendor } from '../types';
+import { buildTimeline, createGeneratedVendors, createHistoricalSeed, mulberry32, type SeedData } from './historicalSeed';
+import { findRegion } from './indiaRegions';
 
 export const mockVendors: Vendor[] = [
   {
@@ -8,6 +17,7 @@ export const mockVendors: Vendor[] = [
     name: 'Surya Shakti Solars',
     location: 'Kanpur, Uttar Pradesh',
     state: 'Uttar Pradesh',
+    district: 'Kanpur Nagar',
     rating: 4.8,
     distanceKm: 2.4,
     empanelled: true,
@@ -23,6 +33,7 @@ export const mockVendors: Vendor[] = [
     name: 'GreenVillage Energy',
     location: 'Kanpur, Uttar Pradesh',
     state: 'Uttar Pradesh',
+    district: 'Kanpur Nagar',
     rating: 4.6,
     distanceKm: 5.1,
     empanelled: true,
@@ -38,6 +49,7 @@ export const mockVendors: Vendor[] = [
     name: 'SunRise Rural Energy',
     location: 'Kanpur, Uttar Pradesh',
     state: 'Uttar Pradesh',
+    district: 'Kanpur Nagar',
     rating: 4.7,
     distanceKm: 7.3,
     empanelled: true,
@@ -53,6 +65,7 @@ export const mockVendors: Vendor[] = [
     name: 'Saurashtra Sun Systems',
     location: 'Rajkot, Gujarat',
     state: 'Gujarat',
+    district: 'Rajkot',
     rating: 4.7,
     distanceKm: 3.2,
     empanelled: true,
@@ -68,6 +81,7 @@ export const mockVendors: Vendor[] = [
     name: 'Kongu Green Power',
     location: 'Coimbatore, Tamil Nadu',
     state: 'Tamil Nadu',
+    district: 'Coimbatore',
     rating: 4.5,
     distanceKm: 4.6,
     empanelled: true,
@@ -83,6 +97,7 @@ export const mockVendors: Vendor[] = [
     name: 'Marwar Solar Works',
     location: 'Jaipur, Rajasthan',
     state: 'Rajasthan',
+    district: 'Jaipur',
     rating: 4.4,
     distanceKm: 6.0,
     empanelled: true,
@@ -98,6 +113,7 @@ export const mockVendors: Vendor[] = [
     name: 'Sahyadri Solar Solutions',
     location: 'Pune, Maharashtra',
     state: 'Maharashtra',
+    district: 'Pune',
     rating: 4.3,
     distanceKm: 8.4,
     empanelled: false,
@@ -113,6 +129,7 @@ export const mockVendors: Vendor[] = [
     name: 'Deccan SunPower',
     location: 'Pune, Maharashtra',
     state: 'Maharashtra',
+    district: 'Pune',
     rating: 4.6,
     distanceKm: 3.9,
     empanelled: true,
@@ -153,41 +170,47 @@ const seedLeads: SeedLead[] = [
   { id: 'SM-2026-1010', applicantName: 'Sunita Jadhav', phone: '9876501010', location: 'Pune, MH', state: 'Maharashtra', monthlyUnits: 220, monthlyBill: 1900, vendorId: 'V-008', status: 'Installation Scheduled', submitted: '2026-09-12T10:00:00.000Z' },
 ];
 
-const STATUS_PATH: ApplicationStatus[] = ['Pending Verification', 'Approved', 'Installation Scheduled', 'Completed'];
+/** Districts for the handwritten leads, used by the dependent District filter. */
+const LEAD_DISTRICTS: Record<string, string> = {
+  'SM-2026-1001': 'Kanpur Nagar',
+  'SM-2026-1002': 'Rajkot',
+  'SM-2026-1003': 'Coimbatore',
+  'SM-2026-1004': 'Jaipur',
+  'SM-2026-1005': 'Nashik',
+  'SM-2026-1006': 'Lucknow',
+  'SM-2026-1007': 'Surat',
+  'SM-2026-1008': 'Madurai',
+  'SM-2026-1009': 'Jodhpur',
+  'SM-2026-1010': 'Pune',
+};
 
-const addHours = (iso: string, hours: number) => new Date(new Date(iso).getTime() + hours * 3_600_000).toISOString();
-
-function buildTimeline(submitted: string, status: ApplicationStatus): TimelineEvent[] {
-  const events: TimelineEvent[] = [
-    { status: 'Submitted', note: 'Application submitted via SolarMitra', at: submitted },
-    { status: 'Pending Verification', note: 'Documents queued for verification', at: addHours(submitted, 1) },
-  ];
-  if (status === 'Rejected') {
-    events.push({ status: 'Rejected', note: 'Selected vendor is not empanelled in this area', at: addHours(submitted, 30) });
-    return events;
-  }
-  const reached = STATUS_PATH.indexOf(status);
-  const notes: Record<string, string> = {
-    Approved: 'Loan approved by Satin Finserv credit team',
-    'Installation Scheduled': 'Vendor confirmed installation slot',
-    Completed: 'System installed and net meter activated',
-  };
-  STATUS_PATH.slice(1, reached + 1).forEach((step, index) => events.push({ status: step, note: notes[step], at: addHours(submitted, 24 * (index + 1) * 2) }));
-  return events;
-}
-
-function buildApplication(seed: SeedLead): Application {
+function buildLeadApplication(seed: SeedLead, index: number): Application {
   const rec = calculateSolarRecommendation(seed.monthlyUnits, seed.state, seed.monthlyBill);
   const marketCost = seed.marketCostOverride ?? rec.marketCost;
   const netCost = Math.max(0, marketCost - rec.totalSubsidy);
-  const loan = calculateLoanSummary(netCost, DEMO_FINANCING.annualInterestRate, DEMO_FINANCING.tenureMonths);
-  const timeline = buildTimeline(seed.submitted, seed.status);
-  return {
+  const financed = index % 3 !== 0;
+  const loanAmount = financed ? netCost : 0;
+  const loan = calculateLoanSummary(loanAmount, 7.5, 36);
+  const district = LEAD_DISTRICTS[seed.id];
+  const region = findRegion(seed.state);
+  const discom = region?.discoms[0] ?? 'State DISCOM';
+  const { timeline, status } = buildTimeline({
+    createdAt: seed.submitted,
+    target: seed.status,
+    paymentMode: financed ? 'loan' : 'upfront',
+    applicantIndex: index,
+    rng: mulberry32(9100 + index),
+  });
+  const estimatedMonthlyGeneration = rec.estimatedMonthlyGeneration;
+  const application: Application = {
     id: seed.id,
     applicantName: seed.applicantName,
     phone: seed.phone,
+    consumerNumber: `DISC/${region?.code ?? 'IN'}/${(500000 + index * 31).toString().slice(0, 6)}`,
     location: seed.location,
     state: seed.state,
+    district,
+    discom,
     monthlyUnits: seed.monthlyUnits,
     monthlyBill: seed.monthlyBill,
     systemKW: rec.recommendedKW,
@@ -196,52 +219,61 @@ function buildApplication(seed: SeedLead): Application {
     stateSubsidy: rec.stateSubsidy,
     subsidy: rec.totalSubsidy,
     netCost,
-    loanAmount: netCost,
-    interestRate: DEMO_FINANCING.annualInterestRate,
-    tenureMonths: DEMO_FINANCING.tenureMonths,
+    loanAmount,
+    interestRate: financed ? 7.5 : 0,
+    tenureMonths: financed ? 36 : 0,
     emi: loan.emi,
+    paymentMode: financed ? 'loan' : 'upfront',
+    schemeIds: defaultSchemeIdsForState(seed.state),
     vendorId: seed.vendorId,
-    status: seed.status,
+    status,
     timeline,
+    assignedTo: index % 2 === 0 ? { userId: 'U-AGENT-1', name: 'Priya Nair', at: seed.submitted, byUserId: 'U-ADMIN', byName: 'Demo Operator' } : undefined,
+    estimatedMonthlyGeneration,
+    estimatedMonthlySavings: calculateMonthlySavings(seed.monthlyUnits, seed.monthlyBill, estimatedMonthlyGeneration),
     isSeed: true,
     createdAt: seed.submitted,
     updatedAt: timeline[timeline.length - 1].at,
   };
+  return application;
 }
 
 /** Fresh copies every call so resetting the demo never shares mutated references. */
-export const createSeedVendors = (): Vendor[] => mockVendors.map((vendor) => ({ ...vendor, specialities: [...vendor.specialities] }));
-export const createSeedApplications = (): Application[] => seedLeads.map(buildApplication);
-
-/**
- * Programme-level baseline analytics (demo). New applications that reach an
- * approved state are added on top of this baseline by the analytics service.
- */
-export const mockAnalyticsBaseline = {
-  households: 1240,
-  capacityKW: 3200,
-  co2OffsetTonnes: 4500,
-  loansDisbursedINR: 85_000_000,
-  previousPeriod: { households: 1047, capacityKW: 2710, co2OffsetTonnes: 3820, loansDisbursedINR: 71_400_000 },
-  asOf: 'September 2026',
-};
-
-export const mockMonthlyAnalytics = [
-  { month: 'Jan', installations: 62, capacityKW: 158, co2Tonnes: 221, loansLakh: 42 },
-  { month: 'Feb', installations: 78, capacityKW: 199, co2Tonnes: 279, loansLakh: 53 },
-  { month: 'Mar', installations: 95, capacityKW: 243, co2Tonnes: 340, loansLakh: 65 },
-  { month: 'Apr', installations: 118, capacityKW: 302, co2Tonnes: 423, loansLakh: 80 },
-  { month: 'May', installations: 141, capacityKW: 362, co2Tonnes: 507, loansLakh: 96 },
-  { month: 'Jun', installations: 152, capacityKW: 391, co2Tonnes: 548, loansLakh: 104 },
-  { month: 'Jul', installations: 168, capacityKW: 434, co2Tonnes: 609, loansLakh: 115 },
-  { month: 'Aug', installations: 199, capacityKW: 515, co2Tonnes: 721, loansLakh: 137 },
-  { month: 'Sep', installations: 227, capacityKW: 596, co2Tonnes: 852, loansLakh: 158 },
+export const createSeedVendors = (): Vendor[] => [
+  ...mockVendors.map((vendor) => ({ ...vendor, specialities: [...vendor.specialities] })),
+  ...createGeneratedVendors(mockVendors),
 ];
 
-export const mockRegionalAnalytics = [
-  { state: 'Uttar Pradesh', households: 412, capacityKW: 1080, loansLakh: 286 },
-  { state: 'Gujarat', households: 318, capacityKW: 845, loansLakh: 214 },
-  { state: 'Tamil Nadu', households: 204, capacityKW: 522, loansLakh: 142 },
-  { state: 'Rajasthan', households: 176, capacityKW: 458, loansLakh: 121 },
-  { state: 'Maharashtra', households: 130, capacityKW: 295, loansLakh: 87 },
-];
+/** The 10 handwritten demo leads, with generated audit trails. */
+export const createDemoLeadApplications = (): Application[] => seedLeads.map(buildLeadApplication);
+
+export interface FullSeed {
+  vendors: Vendor[];
+  applications: Application[];
+  audits: SolarAudit[];
+  transactions: Transaction[];
+  leads: { id: string; applicantName: string; phone: string; state: string; status: ApplicationStatus }[];
+}
+
+/** Everything the demo store needs, generated once per store/reset. */
+export function createFullSeed(): FullSeed {
+  const vendors = createSeedVendors();
+  const history: SeedData = createHistoricalSeed(vendors);
+  const demoLeads = createDemoLeadApplications();
+  const applications = [...demoLeads, ...history.applications];
+  return {
+    vendors,
+    applications,
+    audits: history.audits,
+    transactions: history.transactions,
+    leads: applications.map((application) => ({
+      id: application.id,
+      applicantName: application.applicantName,
+      phone: application.phone,
+      state: application.state,
+      status: application.status,
+    })),
+  };
+}
+
+export type { TimelineEvent };

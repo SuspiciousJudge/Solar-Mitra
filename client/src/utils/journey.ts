@@ -10,17 +10,23 @@ export interface JourneyStep {
 
 const STEPS: TranslationKey[] = ['tlAudit', 'tlSubsidy', 'tlFinancing', 'tlVendor', 'tlInstall', 'tlActivation'];
 
-/** Number of consumer-journey steps completed for each backend status. */
+/** Consumer-journey steps completed per backend status (11-status machine). */
 const COMPLETED_BY_STATUS: Record<ApplicationStatus, number> = {
   'Pending Verification': 3,
   Approved: 4,
-  'Installation Scheduled': 4,
-  Completed: 6,
   Rejected: 3,
+  'Loan Sanctioned': 4,
+  'Loan Disbursed': 4,
+  'Installation Scheduled': 4,
+  Installed: 4,
+  'Net Meter Commissioned': 6,
+  'Subsidy Claimed': 6,
+  'Subsidy Credited': 6,
+  Completed: 6,
 };
 
 export function getJourneySteps(status: ApplicationStatus): JourneyStep[] {
-  const completed = COMPLETED_BY_STATUS[status];
+  const completed = COMPLETED_BY_STATUS[status] ?? 3;
   return STEPS.map((key, index) => {
     if (index < completed) return { key, state: 'done' };
     if (index === completed) return { key, state: status === 'Rejected' ? 'stopped' : 'current' };

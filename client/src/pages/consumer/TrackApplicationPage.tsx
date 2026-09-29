@@ -11,19 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useConsumer } from '@/context/ConsumerContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { statusKey } from '@/i18n/translations';
+import { STATUS_BADGE_VARIANT } from '@/utils/statusVisuals';
 import { useAsync } from '@/hooks/useAsync';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { trackApplication } from '@/services/applicationService';
 import type { TrackedApplication } from '@/types';
 import { formatDate } from '@/utils/format';
-
-const STATUS_BADGE = {
-  'Pending Verification': 'yellow',
-  Approved: 'green',
-  'Installation Scheduled': 'blue',
-  Completed: 'green',
-  Rejected: 'red',
-} as const;
 
 export function TrackApplicationPage() {
   const { t } = useLanguage();
@@ -72,7 +65,7 @@ export function TrackApplicationPage() {
           <Card className="p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('currentStatus')}</p>
             <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-              <Badge variant={STATUS_BADGE[query.data.status]} className="px-3 py-1 text-sm">
+              <Badge variant={STATUS_BADGE_VARIANT[query.data.status]} className="px-3 py-1 text-sm">
                 {t(statusKey(query.data.status))}
               </Badge>
               <span className="text-xs text-slate-500">

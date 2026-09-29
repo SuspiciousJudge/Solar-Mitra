@@ -5,6 +5,7 @@ export interface VendorDoc {
   name: string;
   location: string;
   state: string;
+  district?: string;
   rating: number;
   distanceKm: number;
   installations: number;
@@ -22,6 +23,7 @@ const vendorSchema = new Schema<VendorDoc>(
     name: { type: String, required: true, trim: true },
     location: { type: String, required: true },
     state: { type: String, required: true, index: true },
+    district: { type: String },
     rating: { type: Number, min: 0, max: 5, default: 0 },
     distanceKm: { type: Number, default: 0 },
     installations: { type: Number, default: 0 },
