@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Banknote, CircleCheckBig, Clock, IndianRupee, MapPin, Phone, ShieldCheck, Star, TrendingUp, User, UserPlus, Zap } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Banknote, CalendarCheck, CircleCheckBig, Clock, IndianRupee, MapPin, Phone, ShieldCheck, Star, TrendingUp, User, UserPlus, Zap } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -52,8 +52,6 @@ export function ApplicationDetailPage() {
   useDocumentTitle(id);
   const { user } = useAuth();
   const query = useAsync(() => fetchApplication(id), [id]);
-  const { changeStatus, pendingId } = useStatusUpdate();
-  const [confirmReject, setConfirmReject] = useState(false);
   const [showDateOfBirth, setShowDateOfBirth] = useState(false);
   const trail = useAsync(() => fetchTransactions({ search: id, limit: 50 }), [id]);
   const { changeStatus, pendingId } = useStatusUpdate('applications');

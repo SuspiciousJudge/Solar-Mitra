@@ -78,11 +78,7 @@ export const auditSchema = z.object({
   district: z.string().trim().max(80).optional(),
   discom: z.string().trim().max(120).optional(),
 
-  monthlyUnits: positiveNumber('Monthly consumption', 2000)
-    .refine(
-      (v) => v > 0,
-      'Monthly consumption must be greater than 0'
-    ),
+  monthlyUnits: positiveNumber('Monthly consumption', 20000),
 
   monthlyBill: positiveNumber('Monthly bill', 1_000_000).optional(),
   userId: z.string().max(64).optional(),
@@ -116,10 +112,7 @@ export const createApplicationSchema = z
     district: z.string().trim().max(80).optional(),
     discom: z.string().trim().max(120).optional(),
 
-    monthlyUnits: positiveNumber('Monthly consumption', 20000).refine(
-      (value) => value > 0,
-      'Monthly consumption must be greater than 0'
-    ),
+    monthlyUnits: positiveNumber('Monthly consumption', 20000),
 
     monthlyBill: positiveNumber('Monthly bill', 1_000_000).optional(),
 

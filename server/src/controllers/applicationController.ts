@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
-import { defaultSchemesForState } from '../config/subsidySchemes';
+import { defaultSchemeIdsForState } from '../config/subsidySchemes';
 import { getValidatedQuery } from '../middleware/validate';
 import { getStore } from '../services/dataStore';
 
@@ -19,6 +19,7 @@ import {
 import {
   calculateLoanSummary,
   calculateMonthlySavings,
+  calculateMonthlyGeneration,
   calculateSolarRecommendation,
   calculateMarketCost,
   calculateSubsidy,
@@ -52,7 +53,16 @@ export async function createApplication(req: Request, res: Response) {
   if (selectedKW < 1 || selectedKW > DEMO_POLICY.maxRecommendedKW) throw new AppError(400, 'Selected system size is not supported');
   const marketCost = calculateMarketCost(selectedKW);
   const subsidy = calculateSubsidy(selectedKW, input.state, marketCost);
-  const rec = { ...recommendation, recommendedKW: selectedKW, marketCost, ...subsidy, netCost: calculateNetCost(marketCost, subsidy.totalSubsidy) };
+  const selectedMonthlyGeneration = calculateMonthlyGeneration(selectedKW);
+  const rec = {
+    ...recommendation,
+    recommendedKW: selectedKW,
+    marketCost,
+    ...subsidy,
+    netCost: calculateNetCost(marketCost, subsidy.totalSubsidy),
+    estimatedMonthlyGeneration: selectedMonthlyGeneration,
+    estimatedMonthlySavings: calculateMonthlySavings(input.monthlyUnits, input.monthlyBill, selectedMonthlyGeneration),
+  };
   if (input.loanAmount > rec.netCost) throw new AppError(400, 'Loan amount cannot exceed the estimated net cost');
   const hasLoan = input.loanAmount > 0;
   const loan = calculateLoanSummary(input.loanAmount, input.interestRate, input.tenureMonths);
@@ -84,20 +94,15 @@ export async function createApplication(req: Request, res: Response) {
     emi: loan.emi,
     schemeIds: defaultSchemeIdsForState(input.state),
     vendorId: vendor.id,
-      selectedKW,
-      preferredDate: input.preferredDate,
-      preferredTime: input.preferredTime,
-      installerNote: input.note,
-      consentGiven: input.consentGiven,
-      journey: input.journey,
-
-      estimatedMonthlyGeneration: rec.estimatedMonthlyGeneration,
-      estimatedMonthlySavings: calculateMonthlySavings(
-        input.monthlyUnits,
-        input.monthlyBill,
-        rec.estimatedMonthlyGeneration
-      ),
-    };
+    selectedKW,
+    preferredDate: input.preferredDate,
+    preferredTime: input.preferredTime,
+    installerNote: input.note,
+    consentGiven: input.consentGiven,
+    journey: input.journey,
+    estimatedMonthlyGeneration: rec.estimatedMonthlyGeneration,
+    estimatedMonthlySavings: rec.estimatedMonthlySavings,
+  });
 
   // Duplicates never block a submission — the operator sees the warning and decides.
   sendSuccess(res, { ...application, duplicates: duplicates.length > 0 ? duplicates : undefined }, 201);
