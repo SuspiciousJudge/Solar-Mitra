@@ -50,7 +50,13 @@ export interface BillData {
   state: string;
   monthlyUnits: number;
   monthlyBill: number;
-  source: 'ocr-demo' | 'manual';
+  source: 'ocr' | 'manual';
+  consumerName?: string;
+  consumerNumber?: string;
+  discom?: string;
+  meterNumber?: string;
+  billingPeriod?: string;
+  sanctionedLoad?: string;
 }
 
 export interface FinancingChoice {

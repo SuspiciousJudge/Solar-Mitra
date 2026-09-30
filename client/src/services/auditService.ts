@@ -8,7 +8,17 @@ import { api, isDemoFallbackEnabled, isNetworkError, unwrap } from './api';
 export async function createAudit(bill: BillData): Promise<{ auditId?: string; offline: boolean }> {
   try {
     const result = await unwrap<AuditResult>(
-      api.post('/audits', { state: bill.state, monthlyUnits: bill.monthlyUnits, monthlyBill: bill.monthlyBill || undefined }),
+      api.post('/audits', {
+        state: bill.state,
+        monthlyUnits: bill.monthlyUnits,
+        monthlyBill: bill.monthlyBill || undefined,
+        consumerName: bill.consumerName,
+        consumerNumber: bill.consumerNumber,
+        discom: bill.discom,
+        meterNumber: bill.meterNumber,
+        billingPeriod: bill.billingPeriod,
+        sanctionedLoad: bill.sanctionedLoad,
+      }),
     );
     return { auditId: result.audit.id, offline: false };
   } catch (error) {

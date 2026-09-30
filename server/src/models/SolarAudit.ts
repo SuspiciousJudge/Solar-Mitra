@@ -6,6 +6,11 @@ export interface SolarAuditDoc {
   state: string;
   district?: string;
   discom?: string;
+  consumerName?: string;
+  consumerNumber?: string;
+  meterNumber?: string;
+  billingPeriod?: string;
+  sanctionedLoad?: string;
   monthlyUnits: number;
   monthlyBill: number;
   recommendedKW: number;
@@ -26,6 +31,11 @@ const solarAuditSchema = new Schema<SolarAuditDoc>(
     state: { type: String, required: true },
     district: { type: String },
     discom: { type: String },
+    consumerName: { type: String },
+    consumerNumber: { type: String },
+    meterNumber: { type: String },
+    billingPeriod: { type: String },
+    sanctionedLoad: { type: String },
     monthlyUnits: { type: Number, required: true, min: 0 },
     monthlyBill: { type: Number, required: true, min: 0 },
     recommendedKW: { type: Number, required: true },
