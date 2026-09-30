@@ -60,6 +60,11 @@ export interface SolarAudit {
   state: string;
   district?: string;
   discom?: string;
+  consumerName?: string;
+  consumerNumber?: string;
+  meterNumber?: string;
+  billingPeriod?: string;
+  sanctionedLoad?: string;
   monthlyUnits: number;
   monthlyBill: number;
   recommendedKW: number;

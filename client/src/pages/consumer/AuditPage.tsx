@@ -11,6 +11,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { createAudit } from '@/services/auditService';
 import { getErrorMessage } from '@/services/api';
 import type { BillData } from '@/types';
+import type { BillExtraction } from '@/utils/billOcr';
 
 export function AuditPage() {
   const { t } = useLanguage();
@@ -19,7 +20,8 @@ export function AuditPage() {
   useDocumentTitle(t('auditTitle'));
 
   const [showForm, setShowForm] = useState(Boolean(billData));
-  const [fromOcr, setFromOcr] = useState(billData?.source === 'ocr-demo');
+  const [fromOcr, setFromOcr] = useState(billData?.source === 'ocr');
+  const [extracted, setExtracted] = useState<Partial<BillData>>({});
   const [resetKey, setResetKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [initialValues, setInitialValues] = useState<BillFormValues>({
@@ -28,8 +30,21 @@ export function AuditPage() {
     monthlyBill: billData?.monthlyBill ? String(billData.monthlyBill) : '',
   });
 
-  const handleExtracted = (values: { state: string; monthlyUnits: number; monthlyBill: number }) => {
-    setInitialValues({ state: values.state, monthlyUnits: String(values.monthlyUnits), monthlyBill: String(values.monthlyBill) });
+  const handleExtracted = (values: BillExtraction) => {
+    const metadata = {
+      consumerName: values.consumerName,
+      consumerNumber: values.consumerNumber,
+      discom: values.discom,
+      meterNumber: values.meterNumber,
+      billingPeriod: values.billingPeriod,
+      sanctionedLoad: values.sanctionedLoad,
+    };
+    setExtracted(metadata);
+    setInitialValues({
+      state: values.state ?? initialValues.state,
+      monthlyUnits: values.monthlyUnits === undefined ? initialValues.monthlyUnits : String(values.monthlyUnits),
+      monthlyBill: values.monthlyBill === undefined ? initialValues.monthlyBill : String(values.monthlyBill),
+    });
     setFromOcr(true);
     setShowForm(true);
     setResetKey((k) => k + 1);
@@ -37,9 +52,10 @@ export function AuditPage() {
 
   const handleSubmit = async (bill: BillData) => {
     setSubmitting(true);
-    setBillData(bill);
+    const completedBill = { ...bill, ...extracted };
+    setBillData(completedBill);
     try {
-      const { auditId } = await createAudit(bill);
+      const { auditId } = await createAudit(completedBill);
       setAuditId(auditId);
       navigate('/consumer/subsidy');
     } catch (error) {
@@ -53,6 +69,7 @@ export function AuditPage() {
     <PageTransition className="space-y-5 px-5 pb-8 pt-5">
       <ScreenHeading title={t('auditTitle')} subtitle={t('auditSubtitle')} />
       <BillUploadCard onExtracted={handleExtracted} completed={fromOcr} />
+      {Object.values(extracted).some(Boolean) && <div className="rounded-xl border border-forest-100 bg-forest-50 p-3 text-sm text-forest-900"><p className="font-semibold">{t('ocrOtherDetails')}</p><dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">{([['Consumer number', extracted.consumerNumber], ['Consumer name', extracted.consumerName], ['Electricity provider', extracted.discom], ['Meter number', extracted.meterNumber], ['Billing period', extracted.billingPeriod], ['Sanctioned load', extracted.sanctionedLoad]] as const).filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="inline text-forest-700">{label}: </dt><dd className="inline font-medium">{value}</dd></div>)}</dl><p className="mt-2 text-xs">{t('checkValues')}</p></div>}
 
       {showForm ? (
         <section aria-label={t('checkValues')} className="space-y-3">

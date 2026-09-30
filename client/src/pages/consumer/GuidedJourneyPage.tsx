@@ -23,7 +23,7 @@ import { formatINR, formatNumber } from '@/utils/format';
 const DRAFT_KEY = 'solarmitra.guided-draft';
 const JOURNEY_STEP_EVENT = 'solarmitra:guided-step';
 type Draft = {
-  step: number; source: 'manual' | 'ocr-demo'; state: string; units: string; bill: string; name: string; consumer: string; discom: string; meter: string; connection: string; load: string; period: string;
+  step: number; source: 'manual' | 'ocr'; state: string; units: string; bill: string; name: string; consumer: string; discom: string; meter: string; connection: string; load: string; period: string;
   phone: string; alternate: string; email: string; dob: string; ownership: string; permission: boolean; address1: string; address2: string; city: string; district: string; propertyState: string; pin: string; roof: string; roofArea: string; shaded: string;
   docType: string; systemKW: number; sizeChoice: string; battery: string; payment: string; tenure: number; vendorId: string; preferredDate: string; preferredTime: string; note: string; consent1: boolean; consent2: boolean;
 };
@@ -46,6 +46,19 @@ export function GuidedJourneyPage() {
   const consumer = useConsumer();
   const [d, setD] = useState<Draft>(() => {
     const saved = restoreDraft(demoDefaults(language));
+    if (consumer.billData?.source === 'ocr') return {
+      ...saved,
+      state: consumer.billData.state,
+      units: String(consumer.billData.monthlyUnits),
+      bill: consumer.billData.monthlyBill ? String(consumer.billData.monthlyBill) : '',
+      name: consumer.billData.consumerName ?? saved.name,
+      consumer: consumer.billData.consumerNumber ?? saved.consumer,
+      discom: consumer.billData.discom ?? saved.discom,
+      meter: consumer.billData.meterNumber ?? saved.meter,
+      period: consumer.billData.billingPeriod ?? saved.period,
+      load: consumer.billData.sanctionedLoad?.replace(/[^\d.]/g, '') ?? saved.load,
+      source: 'ocr',
+    };
     if (!saved.state && consumer.billData) return { ...saved, state: consumer.billData.state, units: String(consumer.billData.monthlyUnits), bill: consumer.billData.monthlyBill ? String(consumer.billData.monthlyBill) : '', source: consumer.billData.source };
     return saved;
   });
@@ -95,7 +108,7 @@ export function GuidedJourneyPage() {
     setError('');
     if (next === 1) {
       if (!d.state || !Number.isFinite(units) || units < 0 || units > 20000 || (bill !== undefined && (!Number.isFinite(bill) || bill < 0 || bill > 1_000_000))) { setError(c.required); return; }
-      const billData: BillData = { state: d.state, monthlyUnits: Math.round(units), monthlyBill: Math.round(bill ?? 0), source: d.source };
+      const billData: BillData = { state: d.state, monthlyUnits: Math.round(units), monthlyBill: Math.round(bill ?? 0), source: d.source, consumerName: d.name, consumerNumber: d.consumer, discom: d.discom, meterNumber: d.meter, billingPeriod: d.period, sanctionedLoad: d.load };
       consumer.setBillData(billData);
       setBusy(true);
       try { const result = await createAudit(billData); consumer.setAuditId(result.auditId); }
@@ -110,8 +123,19 @@ export function GuidedJourneyPage() {
     update({ step: Math.max(0, Math.min(7, next)), ...(next === 1 ? { systemKW: suggestedKW, propertyState: d.propertyState || d.state } : {}) });
   };
 
-  const extracted = (values: { state: string; monthlyUnits: number; monthlyBill: number }) => {
-    update({ state: values.state, units: String(values.monthlyUnits), bill: String(values.monthlyBill), source: 'ocr-demo' });
+  const extracted = (values: { state?: string; monthlyUnits?: number; monthlyBill?: number; consumerName?: string; consumerNumber?: string; discom?: string; meterNumber?: string; billingPeriod?: string; sanctionedLoad?: string }) => {
+    update({
+      ...(values.state ? { state: values.state } : {}),
+      ...(values.monthlyUnits !== undefined ? { units: String(values.monthlyUnits) } : {}),
+      ...(values.monthlyBill !== undefined ? { bill: String(values.monthlyBill) } : {}),
+      ...(values.consumerName ? { name: values.consumerName } : {}),
+      ...(values.consumerNumber ? { consumer: values.consumerNumber } : {}),
+      ...(values.discom ? { discom: values.discom } : {}),
+      ...(values.meterNumber ? { meter: values.meterNumber } : {}),
+      ...(values.billingPeriod ? { period: values.billingPeriod } : {}),
+      ...(values.sanctionedLoad ? { load: values.sanctionedLoad.replace(/[^\d.]/g, '') } : {}),
+      source: 'ocr',
+    });
   };
 
   const submit = async () => {
@@ -120,11 +144,11 @@ export function GuidedJourneyPage() {
     if (!vendor) { setError(c.required); return; }
     setBusy(true);
     try {
-      const billData: BillData = { state: d.state, monthlyUnits: Math.round(units), monthlyBill: Math.round(bill ?? 0), source: d.source };
+      const billData: BillData = { state: d.state, monthlyUnits: Math.round(units), monthlyBill: Math.round(bill ?? 0), source: d.source, consumerName: d.name, consumerNumber: d.consumer, discom: d.discom, meterNumber: d.meter, billingPeriod: d.period, sanctionedLoad: d.load };
       consumer.setBillData(billData);
       consumer.selectVendor(vendor);
       consumer.setApplicant({ name: d.name, phone: d.phone, location: d.city });
-      const result = await submitApplication({ applicantName: d.name, phone: d.phone, location: `${d.city}, ${d.propertyState}`, state: d.state, monthlyUnits: Math.round(units), monthlyBill: Math.round(bill ?? 0), auditId: consumer.auditId, vendorId: vendor.id, loanAmount, interestRate: DEMO_FINANCING.annualInterestRate, tenureMonths: d.payment === 'upfront' ? 0 : d.tenure, selectedKW: kw, preferredDate: d.preferredDate, preferredTime: d.preferredTime, note: d.note, consentGiven: true, journey: { electricity: { consumerName: d.name, consumerNumber: d.consumer, discom: d.discom, meterNumber: d.meter, connectionType: d.connection, sanctionedLoad: d.load, billingPeriod: d.period }, personal: { alternateMobile: d.alternate, email: d.email, dateOfBirth: d.dob, preferredLanguage: language }, kyc: { documentType: d.docType, documentStatus: 'demo-collection-only' }, property: { ownership: d.ownership, permission: d.permission, addressLine1: d.address1, addressLine2: d.address2, city: d.city, district: d.district, state: d.propertyState, pinCode: d.pin, roofType: d.roof, roofArea: d.roofArea ? Number(d.roofArea) : undefined, shaded: d.shaded }, solar: { batteryPreference: d.battery, paymentPreference: d.payment }, booking: { preferredDate: d.preferredDate, preferredTime: d.preferredTime, note: d.note, consentGiven: true } } });
+      const result = await submitApplication({ applicantName: d.name, phone: d.phone, consumerNumber: d.consumer, location: `${d.city}, ${d.propertyState}`, state: d.state, monthlyUnits: Math.round(units), monthlyBill: Math.round(bill ?? 0), auditId: consumer.auditId, vendorId: vendor.id, loanAmount, interestRate: DEMO_FINANCING.annualInterestRate, tenureMonths: d.payment === 'upfront' ? 0 : d.tenure, selectedKW: kw, preferredDate: d.preferredDate, preferredTime: d.preferredTime, note: d.note, consentGiven: true, journey: { electricity: { consumerName: d.name, consumerNumber: d.consumer, discom: d.discom, meterNumber: d.meter, connectionType: d.connection, sanctionedLoad: d.load, billingPeriod: d.period }, personal: { alternateMobile: d.alternate, email: d.email, dateOfBirth: d.dob, preferredLanguage: language }, kyc: { documentType: d.docType, documentStatus: 'demo-collection-only' }, property: { ownership: d.ownership, permission: d.permission, addressLine1: d.address1, addressLine2: d.address2, city: d.city, district: d.district, state: d.propertyState, pinCode: d.pin, roofType: d.roof, roofArea: d.roofArea ? Number(d.roofArea) : undefined, shaded: d.shaded }, solar: { batteryPreference: d.battery, paymentPreference: d.payment }, booking: { preferredDate: d.preferredDate, preferredTime: d.preferredTime, note: d.note, consentGiven: true } } });
       consumer.setApplication(result); localStorage.removeItem(DRAFT_KEY); navigate('/consumer/application-success');
     } catch (e) { toast.error(getErrorMessage(e, c.apiError)); }
     finally { setBusy(false); }
@@ -132,7 +156,7 @@ export function GuidedJourneyPage() {
 
   const renderStep = () => {
     switch (d.step) {
-      case 0: return <div className="space-y-4"><BillUploadCard onExtracted={extracted} completed={d.source === 'ocr-demo'} />{d.source === 'ocr-demo' && <p className="rounded-xl bg-forest-50 p-3 text-sm text-forest-800">{c.verify}</p>}<div className="grid gap-3 sm:grid-cols-2">{textInput('name', c.name)}{textInput('consumer', c.consumer || c.consumer)}{textInput('discom', c.discom || c.discom)}{textInput('meter', c.meter)}{textInput('connection', c.connection)}{textInput('load', c.load, 'number')}{textInput('period', c.period)}{selectInput('state', 'State', [...STATES])}{textInput('units', c.units, 'number')}{textInput('bill', c.bill, 'number')}</div><button type="button" className="text-sm font-semibold text-forest-700 underline" onClick={() => update({ source: 'manual' })}>{c.manual}</button></div>;
+      case 0: return <div className="space-y-4"><BillUploadCard onExtracted={extracted} completed={d.source === 'ocr'} />{d.source === 'ocr' && <p className="rounded-xl bg-forest-50 p-3 text-sm text-forest-800">{c.verify}</p>}<div className="grid gap-3 sm:grid-cols-2">{textInput('name', c.name)}{textInput('consumer', c.consumer || c.consumer)}{textInput('discom', c.discom || c.discom)}{textInput('meter', c.meter)}{textInput('connection', c.connection)}{textInput('load', c.load, 'number')}{textInput('period', c.period)}{selectInput('state', 'State', [...STATES])}{textInput('units', c.units, 'number')}{textInput('bill', c.bill, 'number')}</div><button type="button" className="text-sm font-semibold text-forest-700 underline" onClick={() => update({ source: 'manual' })}>{c.manual}</button></div>;
       case 1: return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-2">{textInput('name', c.name)}{textInput('phone', c.mobile, 'tel')}{textInput('alternate', c.alternate, 'tel')}{textInput('email', c.email, 'email')}{textInput('dob', c.dob, 'date')}{label(c.language, 'preferred-language', <Select id="preferred-language" value={language} onChange={(e) => setLanguage(e.target.value as Language)}>{[['en','English'],['hi','हिंदी'],['gu','ગુજરાતી'],['ta','தமிழ்']].map(([v,n]) => <option value={v} key={v}>{n}</option>)}</Select>)}{selectInput('docType', c.kyc, [c.aadhaar,c.pan,c.otherId])}{label(c.idNumber, 'id-number', <Input id="id-number" type="password" autoComplete="off" value={docNumber} onChange={(e) => setDocNumber(e.target.value)} />)}<label className="block text-sm font-semibold text-slate-700">{c.kyc} document (optional)<Input className="mt-1.5" type="file" accept="image/*,.pdf" /></label></div><p className="rounded-xl bg-solar-50 p-3 text-sm text-solar-900">{c.demoKyc}</p>{docNumber.length > 4 && <p className="text-sm text-slate-600">•••• {docNumber.slice(-4)}</p>}</div>;
       case 2: return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-2">{selectInput('ownership', c.owner, options('ownerOptions'))}{d.ownership === options('ownerOptions')[2] && <label className="flex items-center gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" checked={d.permission} onChange={(e) => update({ permission: e.target.checked })} />{c.permission}</label>}{textInput('address1', c.address1)}{textInput('address2', c.address2)}{textInput('city', c.city)}{textInput('district', c.district)}{selectInput('propertyState', 'State', [...STATES])}{textInput('pin', c.pin, 'text')}{selectInput('roof', c.roof, options('roofOptions'))}{textInput('roofArea', c.area, 'number')}{selectInput('shaded', c.shade, options('shadeOptions'))}</div><p className="text-sm text-slate-600">{c.photos}</p><div className="grid gap-3 sm:grid-cols-3">{['Roof photo','Meter photo','Electrical panel photo'].map((x) => <label key={x} className="rounded-xl border border-dashed p-3 text-sm">{x}<Input className="mt-2" type="file" accept="image/*" /></label>)}</div></div>;
       case 3: return <div className="space-y-4"><Card className="bg-forest-50 p-5"><p className="text-sm text-forest-700">{c.recommended} {suggestedKW} kW.</p><p className="mt-1 text-3xl font-black text-forest-900">{formatNumber(units)} kWh/month</p></Card><div className="grid gap-3 sm:grid-cols-2">{label(c.sizePreference, 'sizeChoice', <Select id="sizeChoice" value={d.sizeChoice} onChange={(e) => { const choice = e.target.value; update({ sizeChoice: choice, systemKW: choice === options('preferenceOptions')[1] ? Math.max(1, suggestedKW - 1) : choice === options('preferenceOptions')[2] ? Math.min(DEMO_POLICY.maxRecommendedKW, suggestedKW + 1) : suggestedKW }); }}>{options('preferenceOptions').map((v) => <option key={v}>{v}</option>)}</Select>)}{label(c.system, 'system-size', <Input id="system-size" type="number" min={1} max={DEMO_POLICY.maxRecommendedKW} value={kw} onChange={(e) => update({ systemKW: Number(e.target.value) })} />)}{selectInput('battery', c.battery, options('yesNoMaybe'))}{selectInput('payment', c.payment, options('paymentOptions'))}</div><p className="text-sm text-slate-600">{c.batteryNote}</p></div>;

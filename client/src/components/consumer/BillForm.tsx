@@ -59,7 +59,7 @@ export function BillForm({ initialValues, resetKey, fromOcr, submitting, onSubmi
       state: values.state,
       monthlyUnits: Math.round(toNumber(values.monthlyUnits)),
       monthlyBill: values.monthlyBill.trim() === '' ? 0 : Math.round(toNumber(values.monthlyBill)),
-      source: fromOcr && !isDirty ? 'ocr-demo' : 'manual',
+      source: fromOcr && !isDirty ? 'ocr' : 'manual',
     });
 
   return (

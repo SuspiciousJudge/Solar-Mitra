@@ -77,6 +77,11 @@ export const auditSchema = z.object({
 
   district: z.string().trim().max(80).optional(),
   discom: z.string().trim().max(120).optional(),
+  consumerName: z.string().trim().max(80).optional(),
+  consumerNumber: z.string().trim().max(80).optional(),
+  meterNumber: z.string().trim().max(80).optional(),
+  billingPeriod: z.string().trim().max(80).optional(),
+  sanctionedLoad: z.string().trim().max(40).optional(),
 
   monthlyUnits: positiveNumber('Monthly consumption', 20000),
 
