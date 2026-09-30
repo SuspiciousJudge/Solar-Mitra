@@ -37,9 +37,12 @@ A guided eight-stage flow goes from **electricity details → personal & KYC →
 - **Dashboard** — climate, finance, subsidy and queue KPIs with period-over-period change, impact story, funnel and charts
 - **Leads / Applications** — filterable pipeline with SLA ageing, duplicate warnings, assignment, and role-aware next actions
 - **Money flow** — ledger of every sanction, disbursement, EMI, subsidy movement and vendor payout, plus CSV export
-- **Vendors** — enable/disable partners, see empanelment status
+- **Provider Onboarding** — queue of installer applications with risk flags, verification checklist, document viewer, approve / request-changes / reject
+- **Vendors** — seeded vs onboarded partners, licence-expiry warning, suspend / reinstate
 - **Climate impact** — all 36 states/UTs, monthly series, CO₂ avoided with a labelled methodology
 - **Settings** — reset the demo, inspect the dataset
+
+**For installers:** `/provider` — apply as a SolarMitra partner (7-step onboarding), track review status, and (once approved) see assigned household leads.
 
 ### Operator roles (enforced by the API, mirrored in the UI)
 
@@ -47,7 +50,8 @@ A guided eight-stage flow goes from **electricity details → personal & KYC →
 | --- | --- | --- |
 | **Admin** | Everything: approve/reject, assign leads, sanction/disburse, record transactions, reset demo | — |
 | **Agent** | Verify/approve/reject **only files assigned to them**, claim unassigned files ("Assign to me") | Sanction/disburse loans, credit subsidy, record transactions, reset demo |
-| **Finance** | Sanction loans, disburse, credit subsidy, record EMI/repayment transactions | Approve/reject leads, reset demo |
+| **Finance** | Sanction loans, disburse, credit subsidy, record EMI/repayment transactions; reveal provider bank details (logged) | Approve/reject household leads, approve partners, reset demo |
+| **Provider** | Own onboarding application, document uploads, assigned household leads | Operator console, other providers' files |
 
 ---
 
@@ -67,6 +71,8 @@ Then open **http://localhost:5173**.
 | http://localhost:5173/ | Landing page |
 | http://localhost:5173/consumer | Consumer app (mobile-first; shown in a phone frame on desktop) |
 | http://localhost:5173/admin/login | Operator console |
+| http://localhost:5173/provider | Become a SolarMitra partner |
+| http://localhost:5173/provider/login | Partner login |
 | http://localhost:5000/api/health | API health check |
 
 ### Demo credentials
@@ -76,6 +82,9 @@ Then open **http://localhost:5173**.
 | Admin | `admin@solarmitra.demo` | `demo123` | Demo Operator |
 | Agent | `agent@solarmitra.demo` | `agent123` | Priya Nair (field agent) |
 | Finance | `finance@solarmitra.demo` | `finance123` | Ravi Menon (finance desk) |
+| Provider (Draft) | `provider.new@solarmitra.demo` | `demo123` | Asha Verma — `PRV-2026-1001` Draft |
+| Provider (Submitted) | `provider.pending@solarmitra.demo` | `demo123` | Mehul Shah — awaiting review |
+| Provider (Approved) | `provider.approved@solarmitra.demo` | `demo123` | Rakesh Tiwari — vendor **V-001** |
 
 The login page has a **"Use demo credentials"** button for each role. The consumer `/login` page simulates phone OTP; use **`123456`**.
 
@@ -97,7 +106,8 @@ The login page has a **"Use demo credentials"** button for each role. The consum
 | Applications | **1,260** (10 handwritten story leads + 1,250 generated) | spread over UP, GJ, TN, RJ, MH, KA, WB, MP, HR, PB, BR + more; ~54% financed |
 | Solar audits | **1,900** | every application is preceded by its own audit; the rest never converted |
 | Transactions | **~3,570** | loan sanctions/disbursements, EMIs (with DPD), subsidy claimed/credited, upfront payments, vendor payouts |
-| Vendors | **39** | 3 handwritten Kanpur partners + 36 generated (one per state/UT, some inactive) |
+| Vendors | **40** | 3 handwritten Kanpur partners + 36 generated (one per state/UT, some inactive) + 1 onboarded Assam partner (suspended) |
+| Provider applications | **10** | Draft → Suspended across UP, GJ, TN, RJ, MH, BR, AS — see §13 |
 | Schemes | **33** | central + state catalogue, version `2026.09-demo.1`, every entry labelled a demo assumption |
 
 ### Using MongoDB
@@ -205,7 +215,7 @@ Files waiting in *Pending Verification* show a **48-hour SLA** badge; anything o
 - **Server is the source of truth.** `POST /api/applications` recomputes kW, cost, subsidy, EMI and CO₂ from the submitted units, state and loan terms, so figures from the client can't be tampered with. Every status change is re-validated (illegal move → `409`, wrong role → `403`) and written to the timeline with the operator's name.
 - **One filter object, one truth.** The lead list, transactions, analytics, funnel and CSV exports all consume the same validated filter contract (`state/district/discom/scheme/status/vendor/paymentMode/from/to/search`), so a KPI and the rows underneath it always agree.
 - **Analytics are aggregated, never hard-coded.** Systems live = files that reached net-meter commissioning; sanctioned ≠ disbursed; subsidy claimed ≠ credited; savings accrue from the commissioning month.
-- **Same pure modules on both sides.** `solarCalculator`, `statusFlow` and `ageing` are byte-identical mirrors (a server test fails if they drift).
+- **Same pure modules on both sides.** `solarCalculator`, `statusFlow`, `ageing` and `providerRules` (GSTIN checksum, PAN constitution, IFSC, completeness, partner state machine) are byte-identical mirrors (a server test fails if they drift).
 - **One `DataStore` interface.** Memory and Mongo implementations are interchangeable, so demo mode is not a separate code path in the controllers.
 - **UI components don't make API calls.** They go through `services/*` and hooks. Admin pages are lazy-loaded.
 
@@ -222,7 +232,7 @@ All responses use `{ "success": true, "data": … }` or `{ "success": false, "me
 | POST | `/api/auth/login` | `{email,password}` → `{token,user}` (rate-limited; consumer role denied) |
 | GET | `/api/auth/me` 🔒 | Current operator |
 | GET | `/api/users` 🔒 | Operators available for lead assignment |
-| GET | `/api/vendors?state=&district=&search=&active=` | Vendors (sorted by distance) |
+| GET | `/api/vendors?state=&district=&search=&active=&verified=` | Vendors (sorted by distance). Households should pass `active=true&verified=true`. |
 | GET | `/api/vendors/:id` | Vendor details |
 | PATCH | `/api/vendors/:id/active` 🔒 | Enable/disable a vendor |
 | GET | `/api/schemes?state=&level=&category=` | Subsidy catalogue (versioned, labelled demo assumptions) |
@@ -249,7 +259,31 @@ All responses use `{ "success": true, "data": … }` or `{ "success": false, "me
 | GET | `/api/analytics/regional` 🔒 | All 36 states/UTs (zeros included) |
 | GET | `/api/analytics/funnel` 🔒 | Milestone funnel on its own |
 | GET | `/api/analytics/money-flow` 🔒 | Money in/out by kind and by month |
-| POST | `/api/demo/reset` 🔒 | Reset demo data (admin only) |
+| POST | `/api/demo/reset` 🔒 | Reset demo data including provider applications (admin only) |
+| POST | `/api/provider/auth/register` | Create partner account `{name,email,mobile,password,confirmPassword,acceptTerms,otp}` (demo OTP `123456`) |
+| POST | `/api/provider/auth/login` | Partner JWT (rate-limited; operator tokens rejected here and vice versa) |
+| GET | `/api/provider/auth/me` 🔒 provider | Current partner |
+| GET | `/api/provider/application` 🔒 provider | Own application (draft created on first access) |
+| PUT | `/api/provider/application/steps/:step` 🔒 provider | Save a draft step (`business` … `contact`) |
+| POST | `/api/provider/application/submit` 🔒 provider | Submit when completeness is 100% |
+| POST | `/api/provider/application/resubmit` 🔒 provider | Resubmit after changes requested |
+| POST | `/api/provider/application/documents` 🔒 provider | Multipart upload (`file` + `type`); PDF/JPG/PNG ≤ 5 MB |
+| DELETE | `/api/provider/application/documents/:docId` 🔒 provider | Remove a doc (Draft / Changes Requested only) |
+| GET | `/api/provider/documents/:docId` 🔒 | Stream a file to the owning provider or any operator |
+| GET | `/api/operator/provider-applications` 🔒 | Paginated queue (filters: status, state, district, business type, ranges, DISCOM, risk flags, dates, search) |
+| GET | `/api/operator/provider-applications/stats` 🔒 | Counts, avg review time, pending > 72h |
+| GET | `/api/operator/provider-applications/export.csv` 🔒 | CSV of the filtered queue |
+| GET | `/api/operator/provider-applications/:id?reveal=bank` 🔒 | Full application; `reveal=bank` is admin/finance only and is written to the timeline |
+| PATCH | `/api/operator/provider-applications/:id/assign` 🔒 | `{reviewerId}` / `{assignToMe:true}` |
+| PATCH | `/api/operator/provider-applications/:id/checklist` 🔒 | `{itemKey,status,note}` |
+| PATCH | `/api/operator/provider-applications/:id/documents/:docId` 🔒 | `{verification,remark}` |
+| POST | `/api/operator/provider-applications/:id/request-changes` 🔒 | `{fields,documents,message}` — message required |
+| POST | `/api/operator/provider-applications/:id/approve` 🔒 admin | `{note,tier?}` — blocked until mandatory checklist items are pass; creates an active verified Vendor |
+| POST | `/api/operator/provider-applications/:id/reject` 🔒 | `{reasonCode,message}` required |
+| POST | `/api/operator/providers/:vendorId/suspend` 🔒 admin | `{reason}` — vendor drops out of `GET /api/vendors?active=true&verified=true` |
+| POST | `/api/operator/providers/:vendorId/reinstate` 🔒 admin | `{reason}` |
+
+Provider tokens receive **403** on every operator route. Operator tokens receive **403** on provider application routes. Invalid partner status transitions return **409**.
 
 Every list/analytics/export route accepts the same filter query: `state, district, discom, scheme, status, vendor, paymentMode, assignedTo, search, from, to, preset` (comma-separated lists welcome).
 
@@ -285,7 +319,7 @@ The app handles edge cases: 0 or very large units, a missing bill, unsupported s
 
 ```bash
 npm test              # everything
-npm --prefix server test   # 111 API + domain tests (vitest + supertest)
+npm --prefix server test   # API + domain tests (vitest + supertest)
 npm --prefix client test   # 20 unit tests (calculator, filters, status/journey)
 npm run typecheck          # strict TS for both packages
 ```
@@ -303,18 +337,19 @@ Server coverage highlights: the 11-status state machine (illegal jumps → 409, 
 ├── server/
 │   └── src/
 │       ├── config/         # env, database, policyConfig, statusFlow, subsidySchemes
-│       ├── data/           # indiaRegions, historicalSeed, mockDatabase, seed
-│       ├── models/         # User, Lead, Vendor, Application, Transaction, SolarAudit
+│       ├── data/           # indiaRegions, historicalSeed, mockDatabase, providerSeed, seed
+│       ├── models/         # User, Lead, Vendor, Application, Transaction, SolarAudit, ProviderApplication
 │       ├── services/       # solarCalculator, statusMachine, filters, analyticsService,
-│       │                   # leadQuery, duplicates, csv, auth, DataStore (memory | mongo)
+│       │                   # leadQuery, duplicates, csv, auth, providerService, documentStore,
+│       │                   # DataStore (memory | mongo)
 │       ├── validators/     # zod schemas for every endpoint
 │       ├── middleware/     # auth, validate, rateLimit, errorHandler
 │       └── controllers/  routes/  utils/
 │   └── tests/              # API + domain tests (vitest + supertest)
 └── client/
     └── src/
-        ├── pages/          # Landing, consumer/*, admin/*, auth/*
-        ├── layouts/        # ConsumerLayout (phone frame), AdminLayout (sidebar)
+        ├── pages/          # Landing, consumer/*, admin/*, auth/*, provider/*
+        ├── layouts/        # ConsumerLayout (phone frame), AdminLayout, ProviderLayout
         ├── components/     # ui/ (shadcn-style), consumer/, admin/ (FilterBar, LeadsManager,
         │                   # StatusBadge, SchemeChips, KpiCard), charts/, shared/
         ├── context/        # Language, Consumer (persisted), Auth, Demo
@@ -336,8 +371,59 @@ Server coverage highlights: the 11-status state machine (illegal jumps → 409, 
 ## 12. Tech stack
 
 **Client:** React 18, TypeScript, Vite, React Router, Tailwind CSS, shadcn-style UI primitives (no extra UI kit), Lucide icons, Framer Motion, Recharts, React Hook Form + Zod, Axios, self-hosted Noto/Plus Jakarta fonts (renders offline).
-**Server:** Node.js, Express, TypeScript, Mongoose, JWT, bcrypt, Zod, Helmet, CORS, express-rate-limit, dotenv.
+**Server:** Node.js, Express, TypeScript, Mongoose, JWT, bcrypt, Zod, Helmet, CORS, express-rate-limit, dotenv, **multer** (the only added dependency — used solely to accept multipart partner documents; files are stored under `server/var/provider-docs/` *outside* the public web root with random names, and served only through an authenticated stream).
 
 ---
+
+## 13. Provider onboarding (installers)
+
+Walkthrough with `DEMO_MODE=true` (no MongoDB):
+
+1. Open `/provider` → **Apply now** → register (`otp=123456`) or sign in as `provider.new@solarmitra.demo` / `demo123`.
+2. Fill the 7-step form (business, statutory, credentials, experience, service area, bank, contact). Drafts auto-save. Upload PDF/JPG/PNG ≤ 5 MB.
+3. Review (completeness must be 100%) → Submit (`PRV-2026-XXXX`).
+4. Operator (`admin@solarmitra.demo`) opens **Provider Onboarding**, sees risk flags, requests changes if needed.
+5. Provider fixes and **Resubmit**. Operator completes the verification checklist (all mandatory items = pass) → **Approve** (tier Standard / Preferred).
+6. The new vendor appears in `GET /api/vendors?state=…&active=true&verified=true` and in the consumer installer list. The partner dashboard at `/provider/dashboard` shows assigned household leads.
+
+### Required documents
+
+GST certificate, PAN card, electrical contractor licence, cancelled cheque / bank statement, signatory photo ID. Plus incorporation certificate (Pvt/Public Ltd / OPC), partnership deed (Partnership / LLP), Udyam certificate if an Udyam number is given, DISCOM empanelment letter if claimed.
+
+### Validation rules (single implementation: `providerRules.ts`)
+
+| Field | Rule |
+| --- | --- |
+| Mobile | 10 digits, starts 6–9 (`+91` stripped) |
+| Password | min 8, ≥1 letter, ≥1 number |
+| GSTIN | `^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$` + checksum; first 2 digits must match registered state; chars 3–12 must equal PAN |
+| PAN | `^[A-Z]{5}[0-9]{4}[A-Z]$`; 4th char P=proprietor, F=firm/LLP, C=company |
+| Udyam | `^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$` |
+| IFSC | `^[A-Z]{4}0[A-Z0-9]{6}$` (demo lookup of a small bundled list; unknown → “will be verified manually”) |
+| PIN | 6 digits, first 1–9 |
+| Account | 9–18 digits, confirm must match; stored encrypted, list APIs return `XXXXXX1234` |
+| Licence valid till | Must be a future date; warn / risk-flag if &lt; 90 days |
+| Aadhaar | Optional; **only last 4 digits are stored** |
+
+### Review checklist (mandatory unless noted)
+
+GSTIN valid & active · PAN matches GSTIN · Business registration document · Electrical licence valid · DISCOM empanelment · ALMM/DCR · Experience plausible · References contacted (min 2) · Bank (penny-drop simulated) · Signatory ID · No blacklisting / duplicates · Site/office verification *(optional)*
+
+Approve is **409** until every mandatory item is `pass`. Agent cannot approve (403).
+
+### State machine
+
+`Draft → Submitted → Under Review → (Changes Requested ↔ Resubmitted → Under Review) → Site Verification (optional) → Approved | Rejected`. `Approved → Suspended → Approved` (reinstate). `Rejected` is terminal (new application after 30 days).
+
+Automatic **risk flags** (never auto-reject): GSTIN state ≠ registered state; PAN ≠ GSTIN PAN; licence expired / &lt; 90 days; experience &gt; years in business + 2; bank holder name mismatch; duplicate GSTIN/PAN/phone/bank; installations implausible vs team × years; declared blacklisting.
+
+### Data privacy
+
+- List APIs never return full PAN, Aadhaar or bank account numbers — they are masked (`XXXXX1234A`, `XXXXXX1234`).
+- Bank account numbers are stored AES-256-GCM encrypted; decrypt only on `?reveal=bank` by admin/finance, which appends a **Reveal** event to the timeline.
+- Documents are not in the public web root. `GET /api/provider/documents/:id` requires the owning provider or an operator JWT.
+- Sensitive values are never written to logs.
+
+> **Verification disclaimer:** GSTIN/PAN active-status checks, DISCOM empanelment confirmation and penny-drop bank verification are **simulated in demo mode**. Do not use real identity numbers. Placeholder PDFs/PNGs generated at seed time contain no personal data.
 
 <sub>Figures, vendors, applicants and policies in this demo are simulated for the hackathon and are not official scheme data.</sub>

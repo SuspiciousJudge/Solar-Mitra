@@ -38,7 +38,7 @@ function VendorsContent() {
 
   const state = billData?.state ?? DEMO_LOCATION.state;
   const locationLabel = state === DEMO_LOCATION.state ? DEMO_LOCATION.label : state;
-  const vendorsQuery = useAsync(() => fetchVendors({ state, active: true }), [state]);
+  const vendorsQuery = useAsync(() => fetchVendors({ state, active: true, verified: true }), [state]);
   const vendors = vendorsQuery.data?.vendors ?? [];
 
   if (!billData || !solarRecommendation || !activeFinancing) return null;

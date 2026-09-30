@@ -23,7 +23,7 @@ export const APPLICATION_STATUSES = [
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
-export type UserRole = 'admin' | 'agent' | 'finance' | 'consumer';
+export type UserRole = 'admin' | 'agent' | 'finance' | 'consumer' | 'provider';
 
 /**
  * Allowed transitions. Loan steps are only valid for financed applications —

@@ -5,3 +5,4 @@ export { ApplicationModel } from './Application';
 export { LoanModel } from './Loan';
 export { LeadModel } from './Lead';
 export { TransactionModel } from './Transaction';
+export { ProviderApplicationModel } from './ProviderApplication';

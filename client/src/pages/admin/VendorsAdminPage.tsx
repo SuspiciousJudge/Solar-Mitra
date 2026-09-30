@@ -1,5 +1,6 @@
 import { BadgeCheck, Eye, FilterX, Search, ShieldCheck, Star } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { EmptyState, ErrorState } from '@/components/shared/States';
@@ -13,6 +14,7 @@ import { STATES } from '@/data/states';
 import { useAsync } from '@/hooks/useAsync';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { getErrorMessage } from '@/services/api';
+import { reinstateProvider, suspendProvider } from '@/services/providerService';
 import { fetchVendors, setVendorActive } from '@/services/vendorService';
 import type { Vendor } from '@/types';
 import { cn } from '@/utils/cn';
@@ -41,6 +43,7 @@ export function VendorsAdminPage() {
   const [verification, setVerification] = useState<'' | 'empanelled' | 'not-empanelled'>('');
   const [viewing, setViewing] = useState<Vendor | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [reason, setReason] = useState('Quality pause');
 
   const vendors = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -106,7 +109,7 @@ export function VendorsAdminPage() {
             <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
-                  {['Vendor', 'Location', 'Rating', 'Installations', 'Verification', 'Active', ''].map((h) => (
+                  {['Vendor', 'Location', 'Source', 'Rating', 'Installations', 'Verification', 'Active', ''].map((h) => (
                     <th key={h || 'actions'} scope="col" className="px-4 py-3">{h || <span className="sr-only">Actions</span>}</th>
                   ))}
                 </tr>
@@ -114,7 +117,7 @@ export function VendorsAdminPage() {
               <tbody className="divide-y divide-slate-100">
                 {query.loading
                   ? Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-8 w-full" /></td></tr>
+                      <tr key={i}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-8 w-full" /></td></tr>
                     ))
                   : vendors.map((vendor) => (
                       <tr key={vendor.id} className={cn('hover:bg-slate-50/70', !vendor.active && 'opacity-60')}>
@@ -123,6 +126,15 @@ export function VendorsAdminPage() {
                           <p className="font-mono text-xs text-slate-400">{vendor.id}</p>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{vendor.location}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline">{vendor.source === 'onboarded' ? 'Onboarded' : 'Seeded'}</Badge>
+                            {vendor.tier && <Badge variant="blue">{vendor.tier}</Badge>}
+                            {vendor.licenceExpiry && new Date(vendor.licenceExpiry).getTime() - Date.now() < 90 * 86400000 && (
+                              <Badge variant="yellow">Licence</Badge>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1 font-semibold"><Star className="h-4 w-4 fill-solar-400 text-solar-400" aria-hidden="true" />{vendor.rating.toFixed(1)}</span>
                         </td>
@@ -176,6 +188,46 @@ export function VendorsAdminPage() {
             <div className="col-span-2 rounded-2xl bg-slate-50 p-3">
               <dt className="text-xs font-semibold uppercase text-slate-500">Specialities</dt>
               <dd className="mt-0.5 font-semibold text-slate-900">{viewing.specialities.join(' · ') || '—'}</dd>
+            </div>
+            {viewing.providerApplicationId && (
+              <Link to={`/admin/providers/applications/${viewing.providerApplicationId}`} className="col-span-2 text-sm font-semibold text-forest-700">
+                Open original application
+              </Link>
+            )}
+            <div className="col-span-2 space-y-2">
+              <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" />
+              {viewing.active ? (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await suspendProvider(viewing.id, reason);
+                      toast.success('Partner suspended');
+                      query.reload();
+                    } catch (error) {
+                      toast.error(getErrorMessage(error));
+                    }
+                  }}
+                >
+                  Suspend
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await reinstateProvider(viewing.id, reason);
+                      toast.success('Partner reinstated');
+                      query.reload();
+                    } catch (error) {
+                      toast.error(getErrorMessage(error));
+                    }
+                  }}
+                >
+                  Reinstate
+                </Button>
+              )}
             </div>
           </dl>
         )}

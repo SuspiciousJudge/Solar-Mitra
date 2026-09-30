@@ -25,6 +25,8 @@ export interface UserRecord {
   email: string;
   passwordHash: string;
   role: UserRole;
+  mobile?: string;
+  providerId?: string;
 }
 
 export type PublicUser = Omit<UserRecord, 'passwordHash'>;
@@ -44,6 +46,12 @@ export interface Vendor {
   phone: string;
   yearsInBusiness: number;
   specialities: string[];
+  source?: 'seeded' | 'onboarded';
+  tier?: 'Standard' | 'Preferred';
+  providerApplicationId?: string;
+  licenceExpiry?: string;
+  serviceStates?: string[];
+  suspendReason?: string;
 }
 
 export interface SolarAudit {
@@ -155,6 +163,15 @@ export interface Application {
   isSeed: boolean;
   createdAt: string;
   updatedAt: string;
+  installerUpdates?: Array<{
+    kind: 'site_visit_done' | 'installation_scheduled' | 'installed';
+    date: string;
+    note?: string;
+    photoDocumentId?: string;
+    at: string;
+    byUserId: string;
+    confirmation: 'pending' | 'confirmed';
+  }>;
 }
 
 /** Application payload as returned by the API (adds derived fields). */
@@ -219,6 +236,7 @@ export interface VendorFilter {
   district?: string;
   discom?: string;
   active?: boolean;
+  verified?: boolean;
   search?: string;
 }
 

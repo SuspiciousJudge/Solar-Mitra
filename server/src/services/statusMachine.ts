@@ -14,6 +14,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   agent: 'Field agent — assigned leads only',
   finance: 'Finance — loans, disbursements and transactions',
   consumer: 'Consumer',
+  provider: 'Solar partner',
 };
 
 export interface Actor {

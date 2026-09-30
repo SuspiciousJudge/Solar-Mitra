@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes, type LabelHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { forwardRef, type InputHTMLAttributes, type LabelHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
@@ -44,6 +44,48 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({ className, i
   </div>
 ));
 Select.displayName = 'Select';
+
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(
+  ({ className, invalid, ...props }, ref) => (
+    <textarea
+      ref={ref}
+      aria-invalid={invalid || undefined}
+      className={cn(fieldBase, 'min-h-[96px] py-3', invalid ? 'border-red-400' : 'border-slate-300', className)}
+      {...props}
+    />
+  ),
+);
+Textarea.displayName = 'Textarea';
+
+export function Checkbox({
+  id,
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  id: string;
+  checked?: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <label htmlFor={id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+      <input
+        id={id}
+        type="checkbox"
+        className="mt-1 h-4 w-4 rounded border-slate-300 text-forest-700 focus:ring-forest-500"
+        checked={Boolean(checked)}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>
+        <span className="block text-sm font-semibold text-slate-800">{label}</span>
+        {hint && <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>}
+      </span>
+    </label>
+  );
+}
 
 export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
   return <label className={cn('mb-1.5 block text-sm font-semibold text-slate-700', className)} {...props} />;

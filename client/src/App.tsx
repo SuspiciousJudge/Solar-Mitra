@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/shared/ProtectedRoute';
+import { ProviderProtectedRoute } from '@/components/shared/ProviderProtectedRoute';
 import { ScrollToTop } from '@/components/shared/ScrollToTop';
 import { FullPageLoader } from '@/components/shared/States';
 import { ConsumerLayout } from '@/layouts/ConsumerLayout';
@@ -31,6 +32,15 @@ const VendorsAdminPage = lazyNamed(() => import('@/pages/admin/VendorsAdminPage'
 const AnalyticsPage = lazyNamed(() => import('@/pages/admin/AnalyticsPage'), 'AnalyticsPage');
 const MoneyFlowPage = lazyNamed(() => import('@/pages/admin/MoneyFlowPage'), 'MoneyFlowPage');
 const SettingsPage = lazyNamed(() => import('@/pages/admin/SettingsPage'), 'SettingsPage');
+const ProviderLandingPage = lazyNamed(() => import('@/pages/provider/ProviderLandingPage'), 'ProviderLandingPage');
+const ProviderLoginPage = lazyNamed(() => import('@/pages/provider/ProviderLoginPage'), 'ProviderLoginPage');
+const ProviderRegisterPage = lazyNamed(() => import('@/pages/provider/ProviderRegisterPage'), 'ProviderRegisterPage');
+const ProviderLayout = lazyNamed(() => import('@/layouts/ProviderLayout'), 'ProviderLayout');
+const ProviderApplicationPage = lazyNamed(() => import('@/pages/provider/ProviderApplicationPage'), 'ProviderApplicationPage');
+const ProviderStatusPage = lazyNamed(() => import('@/pages/provider/ProviderStatusPage'), 'ProviderStatusPage');
+const ProviderDashboardPage = lazyNamed(() => import('@/pages/provider/ProviderDashboardPage'), 'ProviderDashboardPage');
+const ProviderApplicationsPage = lazyNamed(() => import('@/pages/admin/ProviderApplicationsPage'), 'ProviderApplicationsPage');
+const ProviderApplicationReviewPage = lazyNamed(() => import('@/pages/admin/ProviderApplicationReviewPage'), 'ProviderApplicationReviewPage');
 const NotFoundPage = lazyNamed(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
 export default function App() {
@@ -41,6 +51,16 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/provider" element={<ProviderLandingPage />} />
+          <Route path="/provider/login" element={<ProviderLoginPage />} />
+          <Route path="/provider/register" element={<ProviderRegisterPage />} />
+          <Route element={<ProviderProtectedRoute />}>
+            <Route element={<ProviderLayout />}>
+              <Route path="/provider/application" element={<ProviderApplicationPage />} />
+              <Route path="/provider/status" element={<ProviderStatusPage />} />
+              <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
+            </Route>
+          </Route>
 
           <Route path="/consumer" element={<ConsumerLayout />}>
             <Route index element={<LanguageSelectPage />} />
@@ -62,6 +82,8 @@ export default function App() {
               <Route path="applications" element={<ApplicationsPage />} />
               <Route path="applications/:id" element={<ApplicationDetailPage />} />
               <Route path="vendors" element={<VendorsAdminPage />} />
+              <Route path="providers/applications" element={<ProviderApplicationsPage />} />
+              <Route path="providers/applications/:id" element={<ProviderApplicationReviewPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="money-flow" element={<MoneyFlowPage />} />
               <Route path="settings" element={<SettingsPage />} />

@@ -9,7 +9,7 @@ export async function listUsers(_req: Request, res: Response) {
   sendSuccess(
     res,
     users
-      .filter((user) => user.role !== 'consumer')
+      .filter((user) => user.role !== 'consumer' && user.role !== 'provider')
       .map(({ passwordHash: _passwordHash, ...user }) => ({ ...user, roleLabel: ROLE_LABELS[user.role] })),
   );
 }

@@ -63,6 +63,9 @@ export function LandingPage() {
             <a href="#impact" className="hover:text-forest-700">For lenders</a>
           </div>
           <div className="flex items-center gap-2">
+            <Link to="/provider" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'hidden sm:inline-flex' })}>
+              For installers
+            </Link>
             <Link to="/admin/login" className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'hidden sm:inline-flex' })}>
               Operator login
             </Link>

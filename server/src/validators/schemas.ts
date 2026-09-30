@@ -268,6 +268,7 @@ export const vendorQuerySchema = z.object({
   district: z.string().trim().max(80).optional(),
   search: z.string().trim().max(100).optional(),
   active: z.enum(['true', 'false']).optional().transform((v) => (v === undefined ? undefined : v === 'true')),
+  verified: z.enum(['true', 'false']).optional().transform((v) => (v === undefined ? undefined : v === 'true')),
 });
 
 export const leadQuerySchema = filterQuerySchema.extend({

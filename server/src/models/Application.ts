@@ -14,7 +14,7 @@ const timelineSchema = new Schema(
     at: { type: String, required: true },
     byUserId: { type: String },
     byName: { type: String },
-    role: { type: String, enum: ['admin', 'agent', 'finance', 'consumer'] },
+    role: { type: String, enum: ['admin', 'agent', 'finance', 'consumer', 'provider'] },
     reason: { type: String },
   },
   { _id: false },
@@ -83,6 +83,7 @@ const applicationSchema = new Schema<ApplicationDoc>(
     estimatedMonthlyGeneration: { type: Number, default: 0 },
     estimatedMonthlySavings: { type: Number, default: 0 },
     isSeed: { type: Boolean, default: false },
+    installerUpdates: { type: [Schema.Types.Mixed], default: undefined },
   },
   { timestamps: true },
 );
