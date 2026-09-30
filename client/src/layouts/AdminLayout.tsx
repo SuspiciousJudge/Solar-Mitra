@@ -147,7 +147,7 @@ export function AdminLayout() {
             <DemoModeBadge />
           </div>
         </header>
-        <main className="mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8">
+        <main className="mx-auto max-w-[1400px] p-4 sm:p-6 lg:py-8">
           <Suspense fallback={<FullPageLoader />}>
             <Outlet />
           </Suspense>
