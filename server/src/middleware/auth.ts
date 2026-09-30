@@ -32,3 +32,20 @@ export const requireRole =
 
 /** Any desk that can open the operator console (admin, field agent, finance). */
 export const requireOperator: RequestHandler[] = [requireAuth, requireRole('admin', 'agent', 'finance')];
+
+export const requireProvider: RequestHandler[] = [requireAuth, requireRole('provider')];
+
+export const requireAdmin: RequestHandler[] = [requireAuth, requireRole('admin')];
+
+/** Populate req.auth when a Bearer token is present, but do not fail if it is missing. */
+export const optionalAuth: RequestHandler = (req, _res, next) => {
+  const header = req.headers.authorization ?? '';
+  const [scheme, token] = header.split(' ');
+  if (scheme !== 'Bearer' || !token) return next();
+  try {
+    req.auth = verifyToken(token);
+  } catch {
+    /* public routes stay public when the token is stale */
+  }
+  return next();
+};

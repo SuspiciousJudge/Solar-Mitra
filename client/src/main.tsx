@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ConsumerProvider } from './context/ConsumerContext';
 import { DemoProvider } from './context/DemoContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { ProviderAuthProvider } from './context/ProviderAuthContext';
 import './fonts';
 import './index.css';
 
@@ -16,10 +17,12 @@ createRoot(document.getElementById('root')!).render(
       <LanguageProvider>
         <ConsumerProvider>
           <AuthProvider>
-            <DemoProvider>
-              <App />
-              <Toaster position="top-center" richColors closeButton toastOptions={{ style: { borderRadius: 16 } }} />
-            </DemoProvider>
+            <ProviderAuthProvider>
+              <DemoProvider>
+                <App />
+                <Toaster position="top-center" richColors closeButton toastOptions={{ style: { borderRadius: 16 } }} />
+              </DemoProvider>
+            </ProviderAuthProvider>
           </AuthProvider>
         </ConsumerProvider>
       </LanguageProvider>

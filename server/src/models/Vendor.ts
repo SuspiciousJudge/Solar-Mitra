@@ -15,6 +15,12 @@ export interface VendorDoc {
   phone: string;
   yearsInBusiness: number;
   specialities: string[];
+  source?: 'seeded' | 'onboarded';
+  tier?: 'Standard' | 'Preferred';
+  providerApplicationId?: string;
+  licenceExpiry?: string;
+  serviceStates?: string[];
+  suspendReason?: string;
 }
 
 const vendorSchema = new Schema<VendorDoc>(
@@ -33,6 +39,12 @@ const vendorSchema = new Schema<VendorDoc>(
     phone: { type: String, default: '' },
     yearsInBusiness: { type: Number, default: 0 },
     specialities: { type: [String], default: [] },
+    source: { type: String, enum: ['seeded', 'onboarded'] },
+    tier: { type: String, enum: ['Standard', 'Preferred'] },
+    providerApplicationId: { type: String },
+    licenceExpiry: { type: String },
+    serviceStates: { type: [String], default: undefined },
+    suspendReason: { type: String },
   },
   { timestamps: true },
 );

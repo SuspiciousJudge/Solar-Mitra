@@ -2,9 +2,12 @@ import bcrypt from 'bcryptjs';
 import { env } from '../config/env';
 import { SEED_USERS } from '../data/historicalSeed';
 import { createFullSeed } from '../data/mockDatabase';
+import { createProviderSeed, toProviderUserRecords } from '../data/providerSeed';
 import { TRANSACTION_DIRECTIONS, type Application, type SolarAudit, type Transaction, type UserRecord, type Vendor } from '../types';
+import type { ProviderApplication } from '../types/provider';
 import { generateApplicationId, generateAuditId, generateTransactionId } from '../utils/ids';
 import { filterVendors, type DataStore } from './dataStore';
+import { resetDocumentDir } from './documentStore';
 
 interface MemoryState {
   vendors: Vendor[];
@@ -12,6 +15,7 @@ interface MemoryState {
   audits: SolarAudit[];
   transactions: Transaction[];
   users: UserRecord[];
+  providerApplications: ProviderApplication[];
 }
 
 /** Seeded operator accounts — the admin entry honours ADMIN_EMAIL/ADMIN_PASSWORD. */
@@ -25,20 +29,41 @@ export function buildUsers(adminHash: string): UserRecord[] {
   }));
 }
 
-function freshState(adminHash: string): MemoryState {
+function annotateSeededVendors(vendors: Vendor[]): Vendor[] {
+  return vendors.map((vendor) => {
+    if (vendor.id === 'V-001') {
+      return {
+        ...vendor,
+        source: 'onboarded',
+        tier: 'Preferred',
+        providerApplicationId: 'PRV-2026-1006',
+        licenceExpiry: '2027-12-31',
+        serviceStates: ['Uttar Pradesh'],
+      };
+    }
+    return { ...vendor, source: vendor.source ?? 'seeded' };
+  });
+}
+
+function freshState(adminHash: string, hashPassword: (password: string) => string = (password) => bcrypt.hashSync(password, 10)): MemoryState {
+  resetDocumentDir();
   const seed = createFullSeed();
+  const providerSeed = createProviderSeed();
   return {
-    vendors: seed.vendors,
+    vendors: [...annotateSeededVendors(seed.vendors), ...providerSeed.vendors],
     applications: seed.applications,
     audits: seed.audits,
     transactions: seed.transactions,
-    users: buildUsers(adminHash),
+    users: [...buildUsers(adminHash), ...toProviderUserRecords(hashPassword)],
+    providerApplications: providerSeed.applications,
   };
 }
 
 export function createMemoryStore(): DataStore {
   const adminHash = bcrypt.hashSync(env.adminPassword, 10);
-  let state = freshState(adminHash);
+  const providerHash = bcrypt.hashSync('demo123', 10);
+  const hashFor = (password: string) => (password === 'demo123' ? providerHash : bcrypt.hashSync(password, 10));
+  let state = freshState(adminHash, hashFor);
   const clone = <T>(value: T): T => structuredClone(value);
   const withVendorName = (app: Application): Application => ({
     ...clone(app),
@@ -153,8 +178,50 @@ export function createMemoryStore(): DataStore {
       state.transactions.unshift(transaction);
       return clone(transaction);
     },
+    async createUser(user) {
+      state.users.push(clone(user));
+      return clone(user);
+    },
+    async updateUser(id, patch) {
+      const user = state.users.find((entry) => entry.id === id);
+      if (!user) return null;
+      Object.assign(user, patch);
+      return clone(user);
+    },
+    async listProviderApplications() {
+      return clone(state.providerApplications);
+    },
+    async getProviderApplication(id) {
+      const application = state.providerApplications.find((entry) => entry.id === id);
+      return application ? clone(application) : null;
+    },
+    async getProviderApplicationByUserId(userId) {
+      const application = state.providerApplications.find((entry) => entry.userId === userId);
+      return application ? clone(application) : null;
+    },
+    async saveProviderApplication(application) {
+      const index = state.providerApplications.findIndex((entry) => entry.id === application.id);
+      const copy = clone(application);
+      if (index >= 0) state.providerApplications[index] = copy;
+      else state.providerApplications.unshift(copy);
+      return clone(copy);
+    },
+    async upsertVendor(vendor) {
+      const index = state.vendors.findIndex((entry) => entry.id === vendor.id);
+      const copy = clone(vendor);
+      if (index >= 0) state.vendors[index] = copy;
+      else state.vendors.push(copy);
+      return clone(copy);
+    },
+    async patchApplication(id, patch) {
+      const app = state.applications.find((entry) => entry.id === id);
+      if (!app) return null;
+      Object.assign(app, patch);
+      app.updatedAt = new Date().toISOString();
+      return withVendorName(app);
+    },
     async reset() {
-      state = freshState(adminHash);
+      state = freshState(adminHash, hashFor);
     },
   };
 }

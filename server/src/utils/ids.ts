@@ -15,3 +15,19 @@ export function generateAuditId(): string {
 export function generateTransactionId(): string {
   return `TX-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 }
+
+export function generateProviderApplicationId(existingIds: Set<string>, year = new Date().getFullYear()): string {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const candidate = `PRV-${year}-${crypto.randomInt(2000, 10000)}`;
+    if (!existingIds.has(candidate)) return candidate;
+  }
+  return `PRV-${year}-${Date.now().toString().slice(-6)}`;
+}
+
+export function generateDocumentId(): string {
+  return `DOC-${crypto.randomBytes(5).toString('hex')}`;
+}
+
+export function generateUserId(prefix = 'U-PRV'): string {
+  return `${prefix}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+}

@@ -9,7 +9,8 @@ import * as schemes from '../controllers/schemeController';
 import * as transactions from '../controllers/transactionController';
 import * as users from '../controllers/userController';
 import * as vendors from '../controllers/vendorController';
-import { requireAuth, requireOperator, requireRole } from '../middleware/auth';
+import * as provider from '../controllers/providerController';
+import { optionalAuth, requireAuth, requireOperator, requireProvider, requireRole } from '../middleware/auth';
 import { loginLimiter } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -28,6 +29,23 @@ import {
   vendorActiveSchema,
   vendorQuerySchema,
 } from '../validators/schemas';
+import {
+  approveProviderSchema,
+  assignReviewerSchema,
+  checklistPatchSchema,
+  documentTypeSchema,
+  documentVerifySchema,
+  idParamSchema,
+  installerUpdateSchema,
+  providerListQuerySchema,
+  providerLoginSchema,
+  providerRegisterSchema,
+  providerStepParamSchema,
+  rejectProviderSchema,
+  requestChangesSchema,
+  revealQuerySchema,
+  suspendSchema,
+} from '../validators/providerSchemas';
 
 export const router = Router();
 
@@ -39,7 +57,7 @@ router.get('/auth/me', requireAuth, asyncHandler(auth.getMe));
 router.get('/users', ...requireOperator, asyncHandler(users.listUsers));
 
 // Vendors (public read, operator write)
-router.get('/vendors', validate(vendorQuerySchema, 'query'), asyncHandler(vendors.listVendors));
+router.get('/vendors', optionalAuth, validate(vendorQuerySchema, 'query'), asyncHandler(vendors.listVendors));
 router.get('/vendors/:id', asyncHandler(vendors.getVendor));
 router.patch('/vendors/:id/active', ...requireOperator, validate(vendorActiveSchema), asyncHandler(vendors.setVendorActive));
 
@@ -80,3 +98,83 @@ router.get('/analytics/money-flow', ...requireOperator, validate(filterQuerySche
 
 // Demo controls
 router.post('/demo/reset', requireAuth, requireRole('admin'), asyncHandler(resetDemo));
+
+// Provider auth + onboarding
+router.post('/provider/auth/register', loginLimiter, validate(providerRegisterSchema), asyncHandler(provider.postRegister));
+router.post('/provider/auth/login', loginLimiter, validate(providerLoginSchema), asyncHandler(provider.postLogin));
+router.get('/provider/auth/me', ...requireProvider, asyncHandler(provider.getMe));
+router.get('/provider/application', ...requireProvider, asyncHandler(provider.getApplication));
+router.put('/provider/application/steps/:step', ...requireProvider, validate(providerStepParamSchema, 'params'), asyncHandler(provider.putStep));
+router.post('/provider/application/submit', ...requireProvider, asyncHandler(provider.postSubmit));
+router.post('/provider/application/resubmit', ...requireProvider, asyncHandler(provider.postResubmit));
+router.post(
+  '/provider/application/documents',
+  ...requireProvider,
+  provider.providerUpload.single('file'),
+  validate(documentTypeSchema),
+  asyncHandler(provider.postDocument),
+);
+router.delete('/provider/application/documents/:docId', ...requireProvider, asyncHandler(provider.deleteDocument));
+router.get('/provider/documents/:docId', requireAuth, asyncHandler(provider.streamDocument));
+router.get('/provider/leads', ...requireProvider, asyncHandler(provider.getLeads));
+router.post('/provider/leads/:id/update', ...requireProvider, validate(installerUpdateSchema), asyncHandler(provider.postLeadUpdate));
+router.get('/provider/payouts', ...requireProvider, asyncHandler(provider.getPayouts));
+router.get('/provider/notifications', ...requireProvider, asyncHandler(provider.getNotifications));
+router.get('/provider/ifsc/:ifsc', requireAuth, asyncHandler(provider.lookupIfscHandler));
+
+// Operator review of provider applications
+router.get('/operator/provider-applications/stats', ...requireOperator, asyncHandler(provider.operatorStats));
+router.get('/operator/provider-applications/export.csv', ...requireOperator, validate(providerListQuerySchema, 'query'), asyncHandler(provider.operatorExport));
+router.get('/operator/provider-applications', ...requireOperator, validate(providerListQuerySchema, 'query'), asyncHandler(provider.operatorList));
+router.get(
+  '/operator/provider-applications/:id',
+  ...requireOperator,
+  validate(idParamSchema, 'params'),
+  validate(revealQuerySchema, 'query'),
+  asyncHandler(provider.operatorGet),
+);
+router.patch(
+  '/operator/provider-applications/:id/assign',
+  ...requireOperator,
+  validate(assignReviewerSchema),
+  asyncHandler(provider.operatorAssign),
+);
+router.patch(
+  '/operator/provider-applications/:id/checklist',
+  ...requireOperator,
+  validate(checklistPatchSchema),
+  asyncHandler(provider.operatorChecklist),
+);
+router.patch(
+  '/operator/provider-applications/:id/documents/:docId',
+  ...requireOperator,
+  validate(documentVerifySchema),
+  asyncHandler(provider.operatorDocument),
+);
+router.post(
+  '/operator/provider-applications/:id/request-changes',
+  ...requireOperator,
+  validate(requestChangesSchema),
+  asyncHandler(provider.operatorRequestChanges),
+);
+router.post(
+  '/operator/provider-applications/:id/approve',
+  requireAuth,
+  requireRole('admin'),
+  validate(approveProviderSchema),
+  asyncHandler(provider.operatorApprove),
+);
+router.post(
+  '/operator/provider-applications/:id/reject',
+  requireAuth,
+  requireRole('admin', 'agent'),
+  validate(rejectProviderSchema),
+  asyncHandler(provider.operatorReject),
+);
+router.post(
+  '/operator/provider-applications/:id/site-verification',
+  ...requireOperator,
+  asyncHandler(provider.operatorSiteVerification),
+);
+router.post('/operator/providers/:vendorId/suspend', requireAuth, requireRole('admin'), validate(suspendSchema), asyncHandler(provider.operatorSuspend));
+router.post('/operator/providers/:vendorId/reinstate', requireAuth, requireRole('admin'), validate(suspendSchema), asyncHandler(provider.operatorReinstate));

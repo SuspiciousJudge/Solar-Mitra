@@ -6,7 +6,9 @@ export interface UserDoc {
   name: string;
   email: string;
   password: string;
-  role: 'admin' | 'agent' | 'finance' | 'consumer';
+  role: 'admin' | 'agent' | 'finance' | 'consumer' | 'provider';
+  mobile?: string;
+  providerId?: string;
 }
 
 const userSchema = new Schema<UserDoc>(
@@ -16,7 +18,9 @@ const userSchema = new Schema<UserDoc>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     // Stores the bcrypt hash — never the plain-text password.
     password: { type: String, required: true, select: false },
-    role: { type: String, enum: ['admin', 'agent', 'finance', 'consumer'], default: 'consumer' },
+    role: { type: String, enum: ['admin', 'agent', 'finance', 'consumer', 'provider'], default: 'consumer' },
+    mobile: { type: String },
+    providerId: { type: String },
   },
   { timestamps: true },
 );

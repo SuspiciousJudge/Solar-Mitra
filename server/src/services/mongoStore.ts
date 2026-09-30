@@ -6,11 +6,15 @@ import {
   ApplicationModel,
   LeadModel,
   LoanModel,
+  ProviderApplicationModel,
   SolarAuditModel,
   TransactionModel,
   UserModel,
   VendorModel,
 } from '../models';
+import { createProviderSeed, toProviderUserRecords } from '../data/providerSeed';
+import type { ProviderApplication } from '../types/provider';
+import type { ProviderApplicationDoc } from '../models/ProviderApplication';
 import type { ApplicationDoc } from '../models/Application';
 import type { VendorDoc } from '../models/Vendor';
 import type { SolarAuditDoc } from '../models/SolarAudit';
@@ -33,7 +37,23 @@ const toVendor = (doc: VendorDoc): Vendor => ({
   phone: doc.phone,
   yearsInBusiness: doc.yearsInBusiness,
   specialities: [...(doc.specialities ?? [])],
+  source: doc.source,
+  tier: doc.tier,
+  providerApplicationId: doc.providerApplicationId,
+  licenceExpiry: doc.licenceExpiry,
+  serviceStates: doc.serviceStates ? [...doc.serviceStates] : undefined,
+  suspendReason: doc.suspendReason,
 });
+
+function toProviderApplication(doc: ProviderApplicationDoc): ProviderApplication {
+  const { applicationId, createdAt, updatedAt, ...rest } = doc;
+  return {
+    ...(rest as unknown as Omit<ProviderApplication, 'id' | 'createdAt' | 'updatedAt'>),
+    id: applicationId,
+    createdAt: new Date(createdAt).toISOString(),
+    updatedAt: new Date(updatedAt).toISOString(),
+  };
+}
 
 const toAudit = (doc: SolarAuditDoc): SolarAudit => ({
   id: doc.auditId,
@@ -114,6 +134,7 @@ function toApplication(doc: ApplicationDoc, vendorNames: Map<string, string>): A
     isSeed: doc.isSeed,
     createdAt: new Date(doc.createdAt).toISOString(),
     updatedAt: new Date(doc.updatedAt).toISOString(),
+    installerUpdates: doc.installerUpdates,
   };
 }
 
@@ -147,6 +168,22 @@ export async function seedMongo(options: { overwriteSeedApplications?: boolean }
     } else if (!existing.code) {
       existing.code = user.code;
       await existing.save();
+    }
+  }
+
+  const providerSeed = createProviderSeed();
+  for (const user of toProviderUserRecords((password) => bcrypt.hashSync(password, 10))) {
+    const existing = await UserModel.findOne({ email: user.email });
+    if (!existing) {
+      await UserModel.create({
+        code: user.id,
+        name: user.name,
+        email: user.email,
+        password: user.passwordHash,
+        role: user.role,
+        mobile: user.mobile,
+        providerId: user.providerId,
+      });
     }
   }
 
@@ -212,6 +249,35 @@ export async function seedMongo(options: { overwriteSeedApplications?: boolean }
     seed.transactions.map(({ id, ...transaction }) => ({
       updateOne: { filter: { transactionId: id }, update: { $setOnInsert: { transactionId: id, ...transaction } }, upsert: true, timestamps: false },
     })),
+  );
+
+  await VendorModel.bulkWrite(
+    providerSeed.vendors.map(({ id, ...vendor }) => ({
+      updateOne: { filter: { code: id }, update: { $set: { code: id, ...vendor } }, upsert: true },
+    })),
+  );
+
+  await VendorModel.updateOne(
+    { code: 'V-001' },
+    {
+      $set: {
+        source: 'onboarded',
+        tier: 'Preferred',
+        providerApplicationId: 'PRV-2026-1006',
+        licenceExpiry: '2027-12-31',
+        serviceStates: ['Uttar Pradesh'],
+      },
+    },
+  );
+
+  await ProviderApplicationModel.bulkWrite(
+    providerSeed.applications.map((application) => {
+      const { id, createdAt, updatedAt, ...rest } = application;
+      const doc = { ...rest, applicationId: id, createdAt: new Date(createdAt), updatedAt: new Date(updatedAt) };
+      return options.overwriteSeedApplications
+        ? { replaceOne: { filter: { applicationId: id }, replacement: doc, upsert: true } }
+        : { updateOne: { filter: { applicationId: id }, update: { $setOnInsert: doc }, upsert: true, timestamps: false } };
+    }),
   );
 
   await SolarAuditModel.bulkWrite(
@@ -344,12 +410,16 @@ export function createMongoStore(): DataStore {
     },
     async findUserByEmail(email) {
       const doc = await UserModel.findOne({ email: email.toLowerCase() }).select('+password').lean();
-      return doc ? { id: doc.code ?? String(doc._id), name: doc.name, email: doc.email, passwordHash: doc.password, role: doc.role } : null;
+      return doc
+        ? { id: doc.code ?? String(doc._id), name: doc.name, email: doc.email, passwordHash: doc.password, role: doc.role, mobile: doc.mobile, providerId: doc.providerId }
+        : null;
     },
     async findUserById(id) {
       const query = id.startsWith('U-') ? { code: id } : { _id: id };
       const doc = await UserModel.findOne(query).lean().catch(() => null);
-      return doc ? { id: doc.code ?? String(doc._id), name: doc.name, email: doc.email, passwordHash: '', role: doc.role } : null;
+      return doc
+        ? { id: doc.code ?? String(doc._id), name: doc.name, email: doc.email, passwordHash: '', role: doc.role, mobile: doc.mobile, providerId: doc.providerId }
+        : null;
     },
     async listUsers() {
       const docs = await UserModel.find({ role: { $ne: 'consumer' } }).lean();
@@ -375,6 +445,59 @@ export function createMongoStore(): DataStore {
       const { transactionId: id, createdAt, updatedAt, ...rest2 } = doc.toObject() as unknown as Transaction & { transactionId: string; createdAt: Date; updatedAt: Date };
       return { ...rest2, id, isSeed: false } as Transaction;
     },
+    async createUser(user) {
+      await UserModel.create({
+        code: user.id,
+        name: user.name,
+        email: user.email,
+        password: user.passwordHash,
+        role: user.role,
+        mobile: user.mobile,
+        providerId: user.providerId,
+      });
+      return user;
+    },
+    async updateUser(id, patch) {
+      const update: Record<string, unknown> = {};
+      if (patch.name !== undefined) update.name = patch.name;
+      if (patch.mobile !== undefined) update.mobile = patch.mobile;
+      if (patch.providerId !== undefined) update.providerId = patch.providerId;
+      if (patch.passwordHash !== undefined) update.password = patch.passwordHash;
+      const doc = await UserModel.findOneAndUpdate({ code: id }, { $set: update }, { new: true }).lean();
+      return doc
+        ? { id: doc.code ?? String(doc._id), name: doc.name, email: doc.email, passwordHash: '', role: doc.role, mobile: doc.mobile, providerId: doc.providerId }
+        : null;
+    },
+    async listProviderApplications() {
+      const docs = await ProviderApplicationModel.find().sort({ createdAt: -1 }).lean<ProviderApplicationDoc[]>();
+      return docs.map(toProviderApplication);
+    },
+    async getProviderApplication(id) {
+      const doc = await ProviderApplicationModel.findOne({ applicationId: id }).lean<ProviderApplicationDoc>();
+      return doc ? toProviderApplication(doc) : null;
+    },
+    async getProviderApplicationByUserId(userId) {
+      const doc = await ProviderApplicationModel.findOne({ userId }).lean<ProviderApplicationDoc>();
+      return doc ? toProviderApplication(doc) : null;
+    },
+    async saveProviderApplication(application) {
+      const { id, createdAt, updatedAt, ...rest } = application;
+      const doc = await ProviderApplicationModel.findOneAndUpdate(
+        { applicationId: id },
+        { $set: { ...rest, applicationId: id, createdAt: new Date(createdAt), updatedAt: new Date(updatedAt) } },
+        { new: true, upsert: true },
+      ).lean<ProviderApplicationDoc>();
+      return doc ? toProviderApplication(doc) : application;
+    },
+    async upsertVendor(vendor) {
+      const { id, ...rest } = vendor;
+      const doc = await VendorModel.findOneAndUpdate({ code: id }, { $set: { code: id, ...rest } }, { new: true, upsert: true }).lean<VendorDoc>();
+      return doc ? toVendor(doc) : vendor;
+    },
+    async patchApplication(id, patch) {
+      const doc = await ApplicationModel.findOneAndUpdate({ applicationId: id }, { $set: { ...patch, updatedAt: new Date() } }, { new: true }).lean<ApplicationDoc>();
+      return doc ? toApplication(doc, await vendorNameMap()) : null;
+    },
     async reset() {
       await Promise.all([
         ApplicationModel.deleteMany({}),
@@ -383,6 +506,7 @@ export function createMongoStore(): DataStore {
         TransactionModel.deleteMany({}),
         SolarAuditModel.deleteMany({}),
         VendorModel.deleteMany({}),
+        ProviderApplicationModel.deleteMany({}),
       ]);
       await seedMongo({ overwriteSeedApplications: true });
     },

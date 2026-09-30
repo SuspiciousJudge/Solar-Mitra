@@ -11,12 +11,13 @@ export interface TokenPayload {
   role: UserRole;
   /** Carried in the token so the audit trail can record who acted. */
   name: string;
+  providerId?: string;
 }
 
 export const toPublicUser = ({ passwordHash: _passwordHash, ...user }: UserRecord): PublicUser => user;
 
 export function signToken(user: PublicUser): string {
-  const payload: TokenPayload = { sub: user.id, email: user.email, role: user.role, name: user.name };
+  const payload: TokenPayload = { sub: user.id, email: user.email, role: user.role, name: user.name, providerId: user.providerId };
   return jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn } as SignOptions);
 }
 
@@ -29,7 +30,7 @@ export async function login(email: string, password: string): Promise<{ token: s
   // Same message for unknown email and wrong password to avoid account enumeration.
   const valid = user ? await bcrypt.compare(password, user.passwordHash) : false;
   if (!user || !valid) throw new AppError(401, 'Invalid email or password');
-  if (user.role === 'consumer') throw new AppError(403, 'This account does not have operator access');
+  if (user.role === 'consumer' || user.role === 'provider') throw new AppError(403, 'This account does not have operator access');
   const publicUser = toPublicUser(user);
   return { token: signToken(publicUser), user: publicUser };
 }

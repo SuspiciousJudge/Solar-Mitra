@@ -2,7 +2,9 @@ import axios, { AxiosError } from 'axios';
 import type { ApiFailure, ApiSuccess } from '@/types';
 
 export const TOKEN_STORAGE_KEY = 'solarmitra.adminToken';
+export const PROVIDER_TOKEN_STORAGE_KEY = 'solarmitra.providerToken';
 export const SESSION_EXPIRED_EVENT = 'solarmitra:session-expired';
+export const PROVIDER_SESSION_EXPIRED_EVENT = 'solarmitra:provider-session-expired';
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -10,8 +12,15 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+function isProviderPath(url: string): boolean {
+  return url.includes('/provider') && !url.includes('/operator');
+}
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const url = config.url ?? '';
+  const providerToken = localStorage.getItem(PROVIDER_TOKEN_STORAGE_KEY);
+  const adminToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const token = isProviderPath(url) ? providerToken ?? adminToken : adminToken;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -20,9 +29,11 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiFailure>) => {
     const hadToken = Boolean(error.config?.headers?.Authorization);
-    const isLogin = error.config?.url?.includes('/auth/login');
+    const url = error.config?.url ?? '';
+    const isLogin = url.includes('/auth/login');
     if (error.response?.status === 401 && hadToken && !isLogin) {
-      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: error.response.data?.message }));
+      const eventName = isProviderPath(url) ? PROVIDER_SESSION_EXPIRED_EVENT : SESSION_EXPIRED_EVENT;
+      window.dispatchEvent(new CustomEvent(eventName, { detail: error.response.data?.message }));
     }
     return Promise.reject(error);
   },

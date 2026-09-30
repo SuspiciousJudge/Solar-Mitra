@@ -12,6 +12,7 @@ import type {
   Vendor,
   VendorFilter,
 } from '../types';
+import type { ProviderApplication } from '../types/provider';
 
 /**
  * Every controller talks to this interface. Two implementations exist:
@@ -45,15 +46,29 @@ export interface DataStore {
   listUsers(): Promise<UserRecord[]>;
   listTransactions(): Promise<Transaction[]>;
   createTransaction(input: NewTransactionInput): Promise<Transaction>;
+  createUser(user: UserRecord): Promise<UserRecord>;
+  updateUser(id: string, patch: Partial<Pick<UserRecord, 'name' | 'mobile' | 'providerId' | 'passwordHash'>>): Promise<UserRecord | null>;
+  listProviderApplications(): Promise<ProviderApplication[]>;
+  getProviderApplication(id: string): Promise<ProviderApplication | null>;
+  getProviderApplicationByUserId(userId: string): Promise<ProviderApplication | null>;
+  saveProviderApplication(application: ProviderApplication): Promise<ProviderApplication>;
+  upsertVendor(vendor: Vendor): Promise<Vendor>;
+  patchApplication(id: string, patch: Partial<Application>): Promise<Application | null>;
   reset(): Promise<void>;
 }
 
 export function filterVendors(vendors: Vendor[], filter: VendorFilter = {}): Vendor[] {
   const search = filter.search?.trim().toLowerCase();
   return vendors
-    .filter((v) => (filter.state ? v.state.toLowerCase() === filter.state.toLowerCase() : true))
+    .filter((v) => {
+      if (!filter.state) return true;
+      const wanted = filter.state.toLowerCase();
+      if (v.state.toLowerCase() === wanted) return true;
+      return (v.serviceStates ?? []).some((state) => state.toLowerCase() === wanted);
+    })
     .filter((v) => (filter.district ? (v.district ?? '').toLowerCase() === filter.district.toLowerCase() : true))
     .filter((v) => (filter.active === undefined ? true : v.active === filter.active))
+    .filter((v) => (filter.verified === undefined ? true : v.verified === filter.verified))
     .filter((v) => (search ? `${v.name} ${v.location}`.toLowerCase().includes(search) : true))
     .sort((a, b) => a.distanceKm - b.distanceKm);
 }

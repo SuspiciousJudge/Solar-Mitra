@@ -44,6 +44,12 @@ export interface Vendor {
   phone: string;
   yearsInBusiness: number;
   specialities: string[];
+  source?: 'seeded' | 'onboarded';
+  tier?: 'Standard' | 'Preferred';
+  providerApplicationId?: string;
+  licenceExpiry?: string;
+  serviceStates?: string[];
+  suspendReason?: string;
 }
 
 export interface BillData {
@@ -526,6 +532,8 @@ export interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
+  mobile?: string;
+  providerId?: string;
 }
 
 export interface OperatorUser extends AuthUser {

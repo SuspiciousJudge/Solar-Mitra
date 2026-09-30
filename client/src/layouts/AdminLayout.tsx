@@ -10,6 +10,7 @@ import {
   Settings,
   Smartphone,
   Store,
+  UserPlus,
   X,
 } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
@@ -18,12 +19,15 @@ import { DemoModeBadge } from '@/components/shared/DemoModeBadge';
 import { Logo } from '@/components/shared/Logo';
 import { FullPageLoader } from '@/components/shared/States';
 import { useAuth } from '@/context/AuthContext';
+import { useAsync } from '@/hooks/useAsync';
+import { fetchProviderStats } from '@/services/providerService';
 import { cn } from '@/utils/cn';
 
 const NAV = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin/leads', label: 'Leads', icon: ClipboardList },
   { to: '/admin/applications', label: 'Applications', icon: FileText },
+  { to: '/admin/providers/applications', label: 'Provider Onboarding', icon: UserPlus },
   { to: '/admin/vendors', label: 'Vendors', icon: Store },
   { to: '/admin/analytics', label: 'Climate Impact', icon: Leaf },
   { to: '/admin/money-flow', label: 'Money Flow', icon: IndianRupee },
@@ -33,6 +37,8 @@ const NAV = [
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const stats = useAsync(() => fetchProviderStats(), []);
+  const pending = stats.data?.pendingReview ?? 0;
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 py-5">
@@ -54,7 +60,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             }
           >
             <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {item.to.includes('/providers/applications') && pending > 0 && (
+              <span className="rounded-full bg-solar-400 px-2 py-0.5 text-[10px] font-bold text-forest-950">{pending}</span>
+            )}
           </NavLink>
         ))}
       </nav>
