@@ -427,3 +427,19 @@ Automatic **risk flags** (never auto-reject): GSTIN state ≠ registered state; 
 > **Verification disclaimer:** GSTIN/PAN active-status checks, DISCOM empanelment confirmation and penny-drop bank verification are **simulated in demo mode**. Do not use real identity numbers. Placeholder PDFs/PNGs generated at seed time contain no personal data.
 
 <sub>Figures, vendors, applicants and policies in this demo are simulated for the hackathon and are not official scheme data.</sub>
+
+---
+
+## 14. Going live (AWS deployment)
+
+The production server serves **both the API and the built website** — one Node process hosts everything:
+
+```bash
+npm install
+npm start        # builds client + server, then serves API + SPA on :5000
+```
+
+No MongoDB is needed in demo mode (`DEMO_MODE=true`, the default). For a step-by-step
+AWS deployment guide (single EC2 instance, AWS App Runner, or S3 + CloudFront +
+custom domain, plus environment variables, demo credentials and troubleshooting),
+see **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
