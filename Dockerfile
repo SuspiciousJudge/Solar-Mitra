@@ -12,9 +12,12 @@ COPY package.json package-lock.json ./
 COPY server/package.json server/package-lock.json ./server/
 COPY client/package.json client/package-lock.json ./client/
 
-# Install root + sub-packages (postinstall script handles server + client)
-# --ignore-scripts prevents the client from running native tesseract bindings during install
+# Install root + sub-packages explicitly. The root --ignore-scripts install
+# skips its postinstall hook, so each sub-package must be installed here.
+# --ignore-scripts prevents native install hooks from running during the build.
 RUN npm ci --ignore-scripts
+RUN npm --prefix server ci --ignore-scripts
+RUN npm --prefix client ci --ignore-scripts
 
 
 # ============================================================
