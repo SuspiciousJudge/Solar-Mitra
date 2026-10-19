@@ -69,7 +69,7 @@ export function deleteDocumentFile(storedName: string): void {
 export function resetDocumentDir(): void {
   if (!fs.existsSync(ROOT)) return;
   for (const entry of fs.readdirSync(ROOT)) {
-    fs.unlinkSync(path.join(ROOT, entry));
+    fs.rmSync(path.join(ROOT, entry), { force: true });
   }
 }
 
