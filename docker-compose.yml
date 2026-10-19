@@ -1,6 +1,62 @@
-# Optional: local MongoDB for running SolarMitra with DEMO_MODE=false.
-# Start with: docker compose up -d
+# SolarMitra — full local stack
+#
+# Demo mode (no MongoDB):   docker compose up app
+# With MongoDB:             docker compose --profile mongo up
+#
+# Environment:
+#   Copy server/.env.example → server/.env and set JWT_SECRET before starting.
+#   The app service reads variables from server/.env via env_file.
+#
+# Quick start (demo mode):
+#   docker build -t solarmitra .
+#   docker compose up app
+
 services:
+  # ------------------------------------------------------------------
+  # Application (API + built SPA on :5000)
+  # ------------------------------------------------------------------
+  app:
+    image: solarmitra:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: solarmitra-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      # Copy server/.env.example → server/.env and configure before running
+      - path: ./server/.env
+        required: false
+    environment:
+      # Defaults — all overridden by server/.env when present
+      NODE_ENV: production
+      PORT: "5000"
+      DEMO_MODE: "true"
+      # When running with the mongo profile, point at the compose service
+      MONGO_URI: mongodb://mongo:27017/solarmitra
+    volumes:
+      # Persist provider-document uploads across container restarts
+      - solarmitra-docs:/app/server/var/provider-docs
+    depends_on:
+      mongo:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    profiles:
+      # Include in the default profile so `docker compose up app` works
+      - ""
+      - mongo
+
+  # ------------------------------------------------------------------
+  # MongoDB (optional — only needed when DEMO_MODE=false)
+  # Start with:  docker compose --profile mongo up
+  # ------------------------------------------------------------------
   mongo:
     image: mongo:7
     container_name: solarmitra-mongo
@@ -11,6 +67,15 @@ services:
       MONGO_INITDB_DATABASE: solarmitra
     volumes:
       - solarmitra-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    profiles:
+      - mongo
 
 volumes:
   solarmitra-mongo-data:
+  solarmitra-docs:

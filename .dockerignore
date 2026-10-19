@@ -1,0 +1,44 @@
+# ---- version control ----
+.git
+.gitignore
+
+# ---- secrets (never copy these) ----
+.env
+.env.local
+.env.*.local
+server/.env
+client/.env
+
+# ---- generated build artefacts (rebuilt inside Docker) ----
+node_modules
+server/node_modules
+client/node_modules
+server/dist
+client/dist
+
+# ---- runtime data (not source; recreated at runtime) ----
+server/var
+
+# ---- Vite / tsc build caches ----
+.vite
+*.tsbuildinfo
+
+# ---- test output ----
+coverage
+
+# ---- editor / OS junk ----
+.DS_Store
+*.log
+.idea
+.vscode
+
+# ---- demo / docs only — not needed in the image ----
+SolarMitra_3min_demo.mp4
+SolarMitra_Supporting_Statement.md
+support-docs
+video_assets
+video-*.png
+video-*.jpg
+
+# ---- CI/CD config — not needed at runtime ----
+.github

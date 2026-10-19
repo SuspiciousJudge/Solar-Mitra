@@ -10,3 +10,13 @@ coverage/
 .DS_Store
 .vite/
 *.tsbuildinfo
+
+# Demo recordings and generated presentation assets
+*.mp4
+*.wav
+video_assets/
+video-*.png
+video-*.jpg
+
+# Generated supporting documents
+support-docs/*.pdf
