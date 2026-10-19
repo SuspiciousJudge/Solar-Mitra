@@ -148,7 +148,7 @@ export async function operatorReinstate(req: Request, res: Response) {
 }
 
 export async function lookupIfscHandler(req: Request, res: Response) {
-  const { lookupIfsc } = await import('../validators/providerRules');
+  const { lookupIfsc } = await import('../validators/providerRules.js');
   const ifsc = String(req.params.ifsc ?? '').toUpperCase();
   const found = lookupIfsc(ifsc);
   sendSuccess(res, found ? { ...found, ifsc, known: true } : { ifsc, known: false, bank: 'Will be verified manually', branch: '', city: '' });
