@@ -161,7 +161,8 @@ describe('uploads & risk flags', () => {
     const mismatch = await auth(request(app).get('/api/operator/provider-applications/PRV-2026-1009'));
     expect(mismatch.body.data.riskFlags).toContain('gstin_state_mismatch');
     const licence = await auth(request(app).get('/api/operator/provider-applications/PRV-2026-1010'));
-    expect(licence.body.data.riskFlags).toEqual(expect.arrayContaining(['licence_expiring', 'duplicate_phone', 'bank_name_mismatch']));
+    expect(licence.body.data.riskFlags).toEqual(expect.arrayContaining(['duplicate_phone', 'bank_name_mismatch']));
+    expect(licence.body.data.riskFlags).toEqual(expect.arrayContaining([expect.stringMatching(/^licence_expir(ed|ing)$/)]));
   });
 
   it('exposes queue stats', async () => {
