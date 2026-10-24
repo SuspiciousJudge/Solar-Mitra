@@ -3,14 +3,10 @@
 # ============================================================
 #
 # Triggers:
-#   • Every pull request targeting main  → CI (test + lint + build + docker build)
-#   • Every push to main                 → CI + CD (push image to GHCR + deploy to Cloud Run)
+#   • Every pull request targeting main  → CI (test + typecheck + build)
+#   • Every push to main                 → CI + Docker build & push to GHCR
 #
 # Required GitHub Secrets (Settings → Secrets → Actions):
-#   GCP_PROJECT_ID          Google Cloud project ID
-#   GCP_SA_KEY              Service account JSON key (base64 or raw JSON)
-#   GCP_REGION              Cloud Run region, e.g. asia-south1
-#   CLOUD_RUN_SERVICE       Cloud Run service name, e.g. solarmitra
 #   JWT_SECRET              Random hex string (openssl rand -hex 32)
 #   ADMIN_EMAIL             Optional: override seeded admin email
 #   ADMIN_PASSWORD          Optional: override seeded admin password
@@ -19,7 +15,7 @@
 #   MONGO_URI               MongoDB Atlas connection string
 #
 # Registry: ghcr.io (GitHub Container Registry — free, no external account needed)
-# Cloud:    Google Cloud Run (serverless, automatic HTTPS)
+# Deployment: AWS (manual or separate pipeline — image pulled from GHCR)
 # ============================================================
 
 name: CI/CD
@@ -96,10 +92,6 @@ jobs:
     timeout-minutes: 20
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
-      image_digest: ${{ steps.build.outputs.digest }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -140,60 +132,3 @@ jobs:
             VITE_API_URL=/api
             VITE_DEMO_MODE=true
 
-  # ============================================================
-  # Job 3 — Deploy to Google Cloud Run (main branch only)
-  # ============================================================
-  deploy:
-    name: Deploy to Cloud Run
-    needs: docker
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    # Deployment environment — configure in GitHub repo Settings → Environments
-    environment:
-      name: production
-      url: ${{ steps.deploy.outputs.url }}
-
-    permissions:
-      contents: read
-      id-token: write   # required for Workload Identity Federation (recommended)
-      packages: read
-
-    steps:
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-          # Alternatively use Workload Identity Federation (more secure; see Cloud docs)
-
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Deploy to Cloud Run
-        id: deploy
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ secrets.CLOUD_RUN_SERVICE }}
-          region: ${{ secrets.GCP_REGION }}
-          image: ${{ env.IMAGE_NAME }}@${{ needs.docker.outputs.image_digest }}
-          flags: >
-            --port=5000
-            --allow-unauthenticated
-            --min-instances=0
-            --max-instances=3
-            --memory=512Mi
-            --cpu=1
-            --timeout=60
-          env_vars: |
-            NODE_ENV=production
-            PORT=5000
-            DEMO_MODE=true
-          secrets: |
-            JWT_SECRET=JWT_SECRET:latest
-            MONGO_URI=MONGO_URI:latest
-
-      - name: Show deployment URL
-        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
