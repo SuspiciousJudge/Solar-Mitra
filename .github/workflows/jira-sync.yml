@@ -246,29 +246,91 @@ jobs:
         run: echo "No SCRUM-* ticket found in branch name — skipping."
 
   # ============================================================
-  # Job 5 — Incoming webhook FROM Jira Automation
+  # Job 5 — Jira ticket created → auto-create GitHub branch
   # ============================================================
-  jira-event:
-    name: "Jira: Handle incoming Jira webhook"
+  #
+  # Triggered by Jira Automation when ANY ticket is created.
+  # Automatically creates a branch:
+  #   SCRUM-6-fix-login-crash-on-mobile
+  #
+  # Setup (one-time — see bottom of this file for full instructions):
+  #   1. Jira → Project Settings → Automation → Create rule
+  #   2. Trigger: "Issue created"
+  #   3. Action: "Send web request" → POST to GitHub dispatches API
+  #   4. Store a GitHub PAT as GITHUB_PAT secret in this repo
+  # ============================================================
+  auto-create-branch:
+    name: "Jira: Auto-create branch on ticket creation"
     runs-on: ubuntu-latest
     if: github.event_name == 'repository_dispatch' && github.event.action == 'jira-event'
 
-    steps:
-      - name: Log incoming Jira event
-        run: |
-          echo "Received Jira event:"
-          echo "  Issue key : ${{ github.event.client_payload.issue_key }}"
-          echo "  Summary   : ${{ github.event.client_payload.summary }}"
-          echo "  Status    : ${{ github.event.client_payload.status }}"
-          echo "  Assignee  : ${{ github.event.client_payload.assignee }}"
+    permissions:
+      contents: write   # needed to create branches
 
-      # -------------------------------------------------------
-      # Add your Jira → GitHub automation logic below.
-      # Examples:
-      #   • When status == "In Progress" → auto-create a branch
-      #   • When status == "Ready for Dev" → post a Slack message
-      #   • When assignee changes → assign a GitHub issue
-      # -------------------------------------------------------
-      - name: Example — echo status
+    steps:
+      - name: Log incoming Jira payload
         run: |
-          echo "Jira ticket ${{ github.event.client_payload.issue_key }} is now: ${{ github.event.client_payload.status }}"
+          echo "Issue key  : ${{ github.event.client_payload.issue_key }}"
+          echo "Summary    : ${{ github.event.client_payload.summary }}"
+          echo "Issue type : ${{ github.event.client_payload.issue_type }}"
+          echo "Status     : ${{ github.event.client_payload.status }}"
+
+      - name: Build branch name from ticket key + summary
+        id: branch
+        run: |
+          ISSUE_KEY="${{ github.event.client_payload.issue_key }}"
+          SUMMARY="${{ github.event.client_payload.summary }}"
+
+          # Slugify: lowercase, replace non-alphanumeric with hyphen, trim, max 50 chars
+          SLUG=$(echo "$SUMMARY" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9]/-/g' \
+            | sed 's/--*/-/g' \
+            | sed 's/^-//' \
+            | sed 's/-$//' \
+            | cut -c1-50)
+
+          BRANCH_NAME="${ISSUE_KEY}-${SLUG}"
+          echo "Branch name: $BRANCH_NAME"
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Get SHA of main branch
+        id: main_sha
+        run: |
+          SHA=$(gh api repos/${{ github.repository }}/git/ref/heads/main --jq '.object.sha')
+          echo "SHA: $SHA"
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create branch on GitHub
+        run: |
+          gh api repos/${{ github.repository }}/git/refs \
+            -f ref="refs/heads/${{ steps.branch.outputs.name }}" \
+            -f sha="${{ steps.main_sha.outputs.sha }}"
+          echo "Branch '${{ steps.branch.outputs.name }}' created successfully."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Jira
+        uses: atlassian/gajira-login@v3
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Post branch link as comment on Jira ticket
+        uses: atlassian/gajira-comment@v3
+        with:
+          issue: ${{ github.event.client_payload.issue_key }}
+          comment: |
+            *GitHub branch auto-created*
+
+            Branch: {{monospace}}${{ steps.branch.outputs.name }}{{monospace}}
+            Repository: [Solar-Mitra|https://github.com/${{ github.repository }}/tree/${{ steps.branch.outputs.name }}]
+
+            Clone and start working:
+            {code}
+            git fetch origin
+            git checkout ${{ steps.branch.outputs.name }}
+            {code}
