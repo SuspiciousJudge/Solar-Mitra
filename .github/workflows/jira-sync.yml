@@ -1,0 +1,274 @@
+# ============================================================
+# SolarMitra — Jira Sync Workflow
+# ============================================================
+#
+# What this does:
+#   • Push to any feature branch    → transitions Jira ticket to "In Progress"
+#   • PR opened / reopened          → transitions to "In Review" + posts PR link as comment
+#   • PR merged into main           → transitions to "Done" + posts merge comment
+#   • PR closed without merge       → transitions back to "In Progress"
+#   • repository_dispatch (Jira →)  → handles incoming webhook from Jira Automation
+#
+# Branch naming convention (required to auto-detect the ticket):
+#   SCRUM-123                       plain ticket id
+#   SCRUM-123-short-description     id + description (recommended)
+#   feature/SCRUM-123-description   prefix/id-description
+#
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   JIRA_BASE_URL     https://shahrahul3785.atlassian.net
+#   JIRA_USER_EMAIL   your Atlassian account email
+#   JIRA_API_TOKEN    API token from https://id.atlassian.com/manage-profile/security/api-tokens
+#
+# How to get a Jira API token:
+#   1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
+#   2. Click "Create API token" → give it a name → copy the value
+#   3. Add it as JIRA_API_TOKEN secret in GitHub repo settings
+#
+# Jira → GitHub (incoming Jira events):
+#   To trigger this workflow FROM Jira Automation:
+#   1. Open Jira → Project Settings → Automation → Create rule
+#   2. Trigger: "Issue transitioned" (or any trigger you want)
+#   3. Action: "Send web request"
+#      URL:     https://api.github.com/repos/<owner>/Solar-Mitra/dispatches
+#      Method:  POST
+#      Headers: Authorization: Bearer <your GitHub PAT>
+#               Content-Type: application/json
+#      Body:    { "event_type": "jira-event",
+#                 "client_payload": {
+#                   "issue_key":  "{{issue.key}}",
+#                   "summary":    "{{issue.summary}}",
+#                   "status":     "{{issue.status.name}}",
+#                   "assignee":   "{{issue.assignee.displayName}}"
+#                 }
+#               }
+#   The "jira-event" job below receives and logs this payload.
+# ============================================================
+
+name: Jira Sync
+
+on:
+  push:
+    branches-ignore:
+      - main          # main pushes are handled by ci-cd.yml
+
+  pull_request:
+    types: [opened, reopened, closed]
+    branches: [main]
+
+  repository_dispatch:
+    types: [jira-event]   # fired by Jira Automation webhook (see instructions above)
+
+jobs:
+  # ============================================================
+  # Job 1 — On push to a feature branch → In Progress
+  # ============================================================
+  branch-in-progress:
+    name: "Jira: Mark In Progress on branch push"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Login to Jira
+        uses: atlassian/gajira-login@v3
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Find Jira ticket in branch name
+        id: find
+        uses: atlassian/gajira-find-issue-key@v3
+        with:
+          # Looks for SCRUM-NNN pattern in the branch name
+          from: branch
+
+      - name: Transition ticket → In Progress
+        if: steps.find.outputs.issue != ''
+        uses: atlassian/gajira-transition@v3
+        with:
+          issue: ${{ steps.find.outputs.issue }}
+          # Must match the transition name in your Jira board exactly.
+          # Common names: "In Progress", "Start Progress", "Start"
+          transition: "In Progress"
+
+      - name: Log result
+        if: steps.find.outputs.issue != ''
+        run: echo "Transitioned ${{ steps.find.outputs.issue }} → In Progress (branch ${{ github.ref_name }})"
+
+      - name: No ticket found
+        if: steps.find.outputs.issue == ''
+        run: echo "No SCRUM-* ticket found in branch name '${{ github.ref_name }}' — skipping."
+
+  # ============================================================
+  # Job 2 — PR opened or reopened → In Review + PR comment on Jira
+  # ============================================================
+  pr-in-review:
+    name: "Jira: Mark In Review on PR open"
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'opened' || github.event.action == 'reopened')
+
+    steps:
+      - name: Login to Jira
+        uses: atlassian/gajira-login@v3
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Find Jira ticket in branch name
+        id: find
+        uses: atlassian/gajira-find-issue-key@v3
+        with:
+          from: branch
+
+      - name: Transition ticket → In Review
+        if: steps.find.outputs.issue != ''
+        uses: atlassian/gajira-transition@v3
+        with:
+          issue: ${{ steps.find.outputs.issue }}
+          # Common names: "In Review", "Code Review", "Review"
+          # Adjust to match your Jira board's transition name exactly.
+          transition: "In Review"
+
+      - name: Post PR link as Jira comment
+        if: steps.find.outputs.issue != ''
+        uses: atlassian/gajira-comment@v3
+        with:
+          issue: ${{ steps.find.outputs.issue }}
+          comment: |
+            *Pull Request opened for review*
+
+            PR: [${{ github.event.pull_request.title }}|${{ github.event.pull_request.html_url }}]
+            Branch: {{monospace}}${{ github.head_ref }}{{monospace}}
+            Author: ${{ github.event.pull_request.user.login }}
+            Status: Awaiting review
+
+      - name: No ticket found
+        if: steps.find.outputs.issue == ''
+        run: echo "No SCRUM-* ticket found in branch name — skipping."
+
+  # ============================================================
+  # Job 3 — PR merged → Done
+  # ============================================================
+  pr-merged-done:
+    name: "Jira: Mark Done on PR merge"
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
+
+    steps:
+      - name: Login to Jira
+        uses: atlassian/gajira-login@v3
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Find Jira ticket in branch name
+        id: find
+        uses: atlassian/gajira-find-issue-key@v3
+        with:
+          from: branch
+
+      - name: Transition ticket → Done
+        if: steps.find.outputs.issue != ''
+        uses: atlassian/gajira-transition@v3
+        with:
+          issue: ${{ steps.find.outputs.issue }}
+          # Common names: "Done", "Close", "Closed", "Resolved"
+          transition: "Done"
+
+      - name: Post merge comment on Jira
+        if: steps.find.outputs.issue != ''
+        uses: atlassian/gajira-comment@v3
+        with:
+          issue: ${{ steps.find.outputs.issue }}
+          comment: |
+            *Pull Request merged — issue resolved*
+
+            PR: [${{ github.event.pull_request.title }}|${{ github.event.pull_request.html_url }}]
+            Merged by: ${{ github.event.pull_request.merged_by.login }}
+            Merge commit: {{monospace}}${{ github.event.pull_request.merge_commit_sha }}{{monospace}}
+
+      - name: No ticket found
+        if: steps.find.outputs.issue == ''
+        run: echo "No SCRUM-* ticket found in branch name — skipping."
+
+  # ============================================================
+  # Job 4 — PR closed WITHOUT merge → back to In Progress
+  # ============================================================
+  pr-closed-no-merge:
+    name: "Jira: Revert to In Progress on PR close (no merge)"
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == false
+
+    steps:
+      - name: Login to Jira
+        uses: atlassian/gajira-login@v3
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Find Jira ticket in branch name
+        id: find
+        uses: atlassian/gajira-find-issue-key@v3
+        with:
+          from: branch
+
+      - name: Transition ticket → In Progress
+        if: steps.find.outputs.issue != ''
+        uses: atlassian/gajira-transition@v3
+        with:
+          issue: ${{ steps.find.outputs.issue }}
+          transition: "In Progress"
+
+      - name: Post comment on Jira
+        if: steps.find.outputs.issue != ''
+        uses: atlassian/gajira-comment@v3
+        with:
+          issue: ${{ steps.find.outputs.issue }}
+          comment: |
+            *Pull Request closed without merging — moved back to In Progress*
+
+            PR: [${{ github.event.pull_request.title }}|${{ github.event.pull_request.html_url }}]
+            Closed by: ${{ github.event.pull_request.user.login }}
+
+      - name: No ticket found
+        if: steps.find.outputs.issue == ''
+        run: echo "No SCRUM-* ticket found in branch name — skipping."
+
+  # ============================================================
+  # Job 5 — Incoming webhook FROM Jira Automation
+  # ============================================================
+  jira-event:
+    name: "Jira: Handle incoming Jira webhook"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'repository_dispatch' && github.event.action == 'jira-event'
+
+    steps:
+      - name: Log incoming Jira event
+        run: |
+          echo "Received Jira event:"
+          echo "  Issue key : ${{ github.event.client_payload.issue_key }}"
+          echo "  Summary   : ${{ github.event.client_payload.summary }}"
+          echo "  Status    : ${{ github.event.client_payload.status }}"
+          echo "  Assignee  : ${{ github.event.client_payload.assignee }}"
+
+      # -------------------------------------------------------
+      # Add your Jira → GitHub automation logic below.
+      # Examples:
+      #   • When status == "In Progress" → auto-create a branch
+      #   • When status == "Ready for Dev" → post a Slack message
+      #   • When assignee changes → assign a GitHub issue
+      # -------------------------------------------------------
+      - name: Example — echo status
+        run: |
+          echo "Jira ticket ${{ github.event.client_payload.issue_key }} is now: ${{ github.event.client_payload.status }}"
