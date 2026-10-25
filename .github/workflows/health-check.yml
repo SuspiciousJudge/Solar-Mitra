@@ -1,0 +1,79 @@
+# ============================================================
+# SolarMitra — Production Health Check (scheduled monitoring)
+# ============================================================
+#
+# Triggers:
+#   • Every 6 hours (cron, UTC)   → pings the live site + API health endpoint
+#   • Manually from the Actions tab (workflow_dispatch)
+#
+# If the site or the API is down, the run goes red and GitHub notifies the
+# repo owner — a lightweight uptime monitor with no extra services.
+# The full post-deploy gate lives in Job 3 of ci-cd.yml.
+# ============================================================
+
+name: Health Check
+
+on:
+  schedule:
+    - cron: "0 */6 * * *" # 00:00, 06:00, 12:00, 18:00 UTC
+  workflow_dispatch:
+
+env:
+  PROD_URL: "https://dk57cxucy0xlq.cloudfront.net"
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping live site & API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check website (/) and API (/api/health)
+        id: checks
+        shell: bash
+        run: |
+          check_url() {
+            # $1 = label, $2 = output prefix, $3 = URL, $4 = expected marker
+            local label="$1" prefix="$2" url="$3" marker="$4" out code total attempt
+            for attempt in 1 2 3 4 5; do
+              out=$(curl -sS -L -o /tmp/body -w '%{http_code} %{time_total}' --max-time 20 "$url" 2>/dev/null) || out='000 0'
+              code="${out%% *}"; total="${out##* }"
+              if [ "$code" = "200" ] && grep -q "$marker" /tmp/body 2>/dev/null; then
+                echo "${prefix}_code=$code" >> "$GITHUB_OUTPUT"
+                echo "${prefix}_time=$total" >> "$GITHUB_OUTPUT"
+                echo "OK  ${label} ${url} → HTTP $code in ${total}s (attempt $attempt)"
+                return 0
+              fi
+              echo "…  ${label} ${url} attempt $attempt → HTTP $code"
+              [ "$attempt" = "5" ] || sleep 10
+            done
+            echo "FAILED ${label} ${url} after 5 attempts"
+            return 1
+          }
+          check_url "Website" "site" "${PROD_URL}/" 'id="root"'
+          check_url "API"     "api"  "${PROD_URL}/api/health" '"status":"ok"'
+
+      - name: Write health summary
+        if: always()
+        shell: bash
+        env:
+          SITE_CODE: ${{ steps.checks.outputs.site_code || '—' }}
+          SITE_TIME: ${{ steps.checks.outputs.site_time || '—' }}
+          API_CODE: ${{ steps.checks.outputs.api_code || '—' }}
+          API_TIME: ${{ steps.checks.outputs.api_time || '—' }}
+        run: |
+          site_icon="❌"; [ "$SITE_CODE" = "200" ] && site_icon="✅"
+          api_icon="❌";  [ "$API_CODE" = "200" ]  && api_icon="✅"
+          {
+            echo "## 🩺 Production health check"
+            echo ""
+            echo "| Check | Endpoint | HTTP | Response time |"
+            echo "| --- | --- | ---: | ---: |"
+            echo "| ${site_icon} Website | ${PROD_URL}/ | ${SITE_CODE} | ${SITE_TIME}s |"
+            echo "| ${api_icon} API health | ${PROD_URL}/api/health | ${API_CODE} | ${API_TIME}s |"
+            echo ""
+            echo "🔗 **Live site:** ${PROD_URL}/"
+          } >> "$GITHUB_STEP_SUMMARY"
