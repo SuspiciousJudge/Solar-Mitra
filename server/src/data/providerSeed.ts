@@ -78,6 +78,20 @@ function address(line1: string, city: string, district: string, state: string, p
   return { line1, city, district, state, pin };
 }
 
+/**
+ * ISO date (YYYY-MM-DD) `days` from today.
+ *
+ * Demo validity dates (electrical licence, DISCOM empanelment) MUST be
+ * relative: a hard-coded "valid" / "expiring soon" calendar date silently
+ * rots into the "expired" bucket as time passes. That drift broke CI when
+ * PRV-2026-1010's licence ('2026-10-20') flipped from `licence_expiring`
+ * to `licence_expired` on 2026-10-21. Relative dates keep every demo row
+ * permanently in the state it is meant to showcase.
+ */
+function isoDateInDays(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 interface SeedDraft {
   id: string;
   userId: string;
@@ -420,7 +434,7 @@ export function createProviderSeed(): { users: SeedProviderUser[]; applications:
       gstin: makeGstin('08', panLlpRJ),
       pan: panLlpRJ,
       llpin: 'AAB-1234',
-      licenceTill: '2027-08-31',
+      licenceTill: isoDateInDays(330),
       discomEmpanelled: false,
       yearsExperience: 7,
       installations: 88,
@@ -705,7 +719,7 @@ export function createProviderSeed(): { users: SeedProviderUser[]; applications:
       pin: '380001',
       gstin: makeGstin('24', panFirmGJ2),
       pan: panFirmGJ2,
-      licenceTill: '2026-10-20',
+      licenceTill: isoDateInDays(45), // always inside the <90-day window → licence_expiring demo row
       discomEmpanelled: true,
       discomName: 'Uttar Gujarat Vij Company Ltd (UGVCL)',
       yearsExperience: 8,

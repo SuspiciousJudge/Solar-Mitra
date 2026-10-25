@@ -29,10 +29,13 @@ on:
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/solarmitra
   NODE_VERSION: "22"
+  # Live production deployment (CloudFront in front of the AWS-hosted app)
+  PROD_URL: "https://dk57cxucy0xlq.cloudfront.net"
 
 permissions:
   contents: read
   packages: write          # push to GHCR
+  deployments: write       # record the "production" deployment (Job 3)
 
 jobs:
   # ============================================================
@@ -131,4 +134,109 @@ jobs:
           build-args: |
             VITE_API_URL=/api
             VITE_DEMO_MODE=true
+
+  # ============================================================
+  # Job 3 — Post-deploy smoke test (main branch only)
+  # ------------------------------------------------------------
+  # The `environment` block registers a GitHub Deployment, so the live URL
+  # appears under the repo's "Environments / Deployments". The steps then
+  # curl the deployed website and its API health endpoint (with retries)
+  # and fail the pipeline if production is not healthy.
+  # ============================================================
+  deploy-check:
+    name: Deployment Health Check
+    needs: docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: ${{ env.PROD_URL }}
+
+    steps:
+      - name: Check website is reachable (/)
+        id: site
+        shell: bash
+        run: |
+          # SPA shell must answer HTTP 200 and contain the React mount point.
+          check_url() {
+            local url="$1" marker="$2" out code total attempt
+            for attempt in 1 2 3 4 5; do
+              out=$(curl -sS -L -o /tmp/body -w '%{http_code} %{time_total}' --max-time 20 "$url" 2>/dev/null) || out='000 0'
+              code="${out%% *}"; total="${out##* }"
+              if [ "$code" = "200" ] && grep -q "$marker" /tmp/body 2>/dev/null; then
+                echo "code=$code" >> "$GITHUB_OUTPUT"
+                echo "time=$total" >> "$GITHUB_OUTPUT"
+                echo "OK  $url → HTTP $code in ${total}s (attempt $attempt)"
+                return 0
+              fi
+              echo "…  $url attempt $attempt → HTTP $code"
+              [ "$attempt" = "5" ] || sleep 10
+            done
+            echo "FAILED $url after 5 attempts"
+            return 1
+          }
+          check_url "${PROD_URL}/" 'id="root"'
+
+      - name: Check API health (/api/health)
+        id: api
+        shell: bash
+        run: |
+          # Backend must answer HTTP 200 with {"status":"ok", ...}
+          check_url() {
+            local url="$1" marker="$2" out code total attempt
+            for attempt in 1 2 3 4 5; do
+              out=$(curl -sS -L -o /tmp/body -w '%{http_code} %{time_total}' --max-time 20 "$url" 2>/dev/null) || out='000 0'
+              code="${out%% *}"; total="${out##* }"
+              if [ "$code" = "200" ] && grep -q "$marker" /tmp/body 2>/dev/null; then
+                echo "code=$code" >> "$GITHUB_OUTPUT"
+                echo "time=$total" >> "$GITHUB_OUTPUT"
+                echo "body=$(cat /tmp/body)" >> "$GITHUB_OUTPUT"
+                echo "OK  $url → HTTP $code in ${total}s (attempt $attempt)"
+                cat /tmp/body
+                return 0
+              fi
+              echo "…  $url attempt $attempt → HTTP $code"
+              [ "$attempt" = "5" ] || sleep 10
+            done
+            echo "FAILED $url after 5 attempts"
+            return 1
+          }
+          check_url "${PROD_URL}/api/health" '"status":"ok"'
+
+      - name: Write deployment summary
+        if: always()
+        shell: bash
+        env:
+          SITE_CODE: ${{ steps.site.outputs.code || '—' }}
+          SITE_TIME: ${{ steps.site.outputs.time || '—' }}
+          API_CODE: ${{ steps.api.outputs.code || '—' }}
+          API_TIME: ${{ steps.api.outputs.time || '—' }}
+          API_BODY: ${{ steps.api.outputs.body || '—' }}
+          IMAGE_TAGS: ${{ needs.docker.outputs.image_tags }}
+        run: |
+          site_icon="❌"; [ "$SITE_CODE" = "200" ] && site_icon="✅"
+          api_icon="❌";  [ "$API_CODE" = "200" ]  && api_icon="✅"
+          {
+            echo "## 🌐 Production deployment"
+            echo ""
+            echo "| Check | Endpoint | HTTP | Response time |"
+            echo "| --- | --- | ---: | ---: |"
+            echo "| ${site_icon} Website | ${PROD_URL}/ | ${SITE_CODE} | ${SITE_TIME}s |"
+            echo "| ${api_icon} API health | ${PROD_URL}/api/health | ${API_CODE} | ${API_TIME}s |"
+            echo ""
+            echo "🔗 **Live site:** ${PROD_URL}/"
+            echo ""
+            echo "🐳 **Images pushed to GHCR:**"
+            while IFS= read -r tag; do [ -n "$tag" ] && echo "- \`$tag\`"; done <<< "$IMAGE_TAGS"
+            echo ""
+            echo "📦 **Commit:** \`${{ github.sha }}\` · 👤 **Actor:** ${{ github.actor }}"
+            echo ""
+            echo "<details><summary>🩺 Raw /api/health response</summary>"
+            echo ""
+            echo "\`\`\`json"
+            echo "$API_BODY"
+            echo "\`\`\`"
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 

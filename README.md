@@ -4,6 +4,12 @@
 
 **Tagline:** *Your roof can power your future.*
 
+[![CI/CD](https://github.com/SuspiciousJudge/Solar-Mitra/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/SuspiciousJudge/Solar-Mitra/actions/workflows/ci-cd.yml)
+[![Health Check](https://github.com/SuspiciousJudge/Solar-Mitra/actions/workflows/health-check.yml/badge.svg)](https://github.com/SuspiciousJudge/Solar-Mitra/actions/workflows/health-check.yml)
+![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ED?logo=docker&logoColor=white)
+
+🌐 **Live deployment:** <https://dk57cxucy0xlq.cloudfront.net/> · 🩺 **API health:** <https://dk57cxucy0xlq.cloudfront.net/api/health>
+
 SolarMitra helps households find out whether rooftop solar makes sense for them, understand the subsidies they may get, compare paying upfront with a Satin Finserv green loan, and book a verified installer — in one mobile-first, multilingual flow. Operators (lender, field agents, finance desk) get a dashboard that traces every file and every rupee from the first solar audit to the subsidy credited to the household.
 
 ---
